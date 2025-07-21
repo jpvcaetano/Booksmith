@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "booksmith"
+version = "0.1.0"
+description = "A project to generate books from prompts"
+authors = ["Joao Caetano <jpvcaetano@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "booksmith"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^2.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
