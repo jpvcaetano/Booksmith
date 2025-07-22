@@ -7,4 +7,4 @@ class Character(BaseModel):
     background_story: str = ""
     appearance: str = ""
     personality: str = ""
-    other_characteristics: str = ""
+    other_characteristics: str = "" 
