@@ -3,7 +3,7 @@ JSON schemas for structured LLM output generation.
 Based on the existing Pydantic models but optimized for LLM generation.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Schema for character generation
 CHARACTER_SCHEMA = {
@@ -16,39 +16,39 @@ CHARACTER_SCHEMA = {
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "The character's full name"
+                        "description": "The character's full name",
                     },
                     "background_story": {
                         "type": "string",
-                        "description": "Character's backstory in 2-3 sentences"
+                        "description": "Character's backstory in 2-3 sentences",
                     },
                     "appearance": {
-                        "type": "string", 
-                        "description": "Physical description in 2-3 sentences"
+                        "type": "string",
+                        "description": "Physical description in 2-3 sentences",
                     },
                     "personality": {
                         "type": "string",
-                        "description": "Personality traits and characteristics in 2-3 sentences"
+                        "description": "Personality traits and characteristics in 2-3 sentences",
                     },
                     "role": {
                         "type": "string",
-                        "description": "The character's role in the story"
-                    }
+                        "description": "The character's role in the story",
+                    },
                 },
                 "required": ["name", "background_story", "appearance", "personality"],
-                "additionalProperties": False
+                "additionalProperties": False,
             },
             "minItems": 1,
-            "maxItems": 10
+            "maxItems": 10,
         }
     },
     "required": ["characters"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Schema for chapter plan generation
 CHAPTER_PLAN_SCHEMA = {
-    "type": "object", 
+    "type": "object",
     "properties": {
         "chapters": {
             "type": "array",
@@ -58,38 +58,44 @@ CHAPTER_PLAN_SCHEMA = {
                     "chapter_number": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "Sequential chapter number"
+                        "description": "Sequential chapter number",
                     },
                     "title": {
                         "type": "string",
-                        "description": "Engaging chapter title"
+                        "description": "Engaging chapter title",
                     },
                     "summary": {
                         "type": "string",
-                        "description": "Chapter summary in 3-4 sentences describing key events"
+                        "description": "Chapter summary in 3-4 sentences describing key events",
                     },
                     "key_characters": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of main characters involved in this chapter",
-                        "maxItems": 8
+                        "maxItems": 8,
                     },
                     "plot_points": {
-                        "type": "array", 
+                        "type": "array",
                         "items": {"type": "string"},
                         "description": "List of important plot points and key events in this chapter",
-                        "maxItems": 6
-                    }
+                        "maxItems": 6,
+                    },
                 },
-                "required": ["chapter_number", "title", "summary", "key_characters", "plot_points"],
-                "additionalProperties": False
+                "required": [
+                    "chapter_number",
+                    "title",
+                    "summary",
+                    "key_characters",
+                    "plot_points",
+                ],
+                "additionalProperties": False,
             },
             "minItems": 2,
-            "maxItems": 20
+            "maxItems": 20,
         }
     },
     "required": ["chapters"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Schema for story summary generation
@@ -100,11 +106,11 @@ STORY_SUMMARY_SCHEMA = {
             "type": "string",
             "description": "Comprehensive story summary (300-500 words) including main plot, conflict, and resolution",
             "minLength": 100,
-            "maxLength": 10000
+            "maxLength": 10000,
         }
     },
     "required": ["story_summary"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Schema for title generation
@@ -113,24 +119,20 @@ TITLE_SCHEMA = {
     "properties": {
         "titles": {
             "type": "array",
-            "items": {
-                "type": "string",
-                "minLength": 5,
-                "maxLength": 100
-            },
+            "items": {"type": "string", "minLength": 5, "maxLength": 100},
             "minItems": 3,
             "maxItems": 5,
-            "description": "List of 3-5 creative book title suggestions"
+            "description": "List of 3-5 creative book title suggestions",
         },
         "recommended_title": {
             "type": "string",
             "description": "The best title from the list",
             "minLength": 5,
-            "maxLength": 100
-        }
+            "maxLength": 100,
+        },
     },
     "required": ["titles", "recommended_title"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Schema for chapter content generation
@@ -141,21 +143,21 @@ CHAPTER_CONTENT_SCHEMA = {
             "type": "string",
             "description": "Complete chapter content (1000-10000 words) that maintains story continuity",
             "minLength": 500,
-            "maxLength": 10000
+            "maxLength": 10000,
         },
         "continuity_notes": {
             "type": "string",
             "description": "Optional notes about how this chapter connects to previous/future chapters",
-            "maxLength": 500
+            "maxLength": 500,
         },
         "character_development": {
-            "type": "string", 
+            "type": "string",
             "description": "Optional notes about character development in this chapter",
-            "maxLength": 500
-        }
+            "maxLength": 500,
+        },
     },
     "required": ["content"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Schema registry for easy access
@@ -163,15 +165,19 @@ SCHEMAS = {
     "character": CHARACTER_SCHEMA,
     "chapter_plan": CHAPTER_PLAN_SCHEMA,
     "story_summary": STORY_SUMMARY_SCHEMA,
-    "title": TITLE_SCHEMA, 
-    "chapter_content": CHAPTER_CONTENT_SCHEMA
+    "title": TITLE_SCHEMA,
+    "chapter_content": CHAPTER_CONTENT_SCHEMA,
 }
+
 
 def get_schema(schema_name: str) -> Dict[str, Any]:
     """Get a schema by name."""
     if schema_name not in SCHEMAS:
-        raise ValueError(f"Unknown schema: {schema_name}. Available: {list(SCHEMAS.keys())}")
+        raise ValueError(
+            f"Unknown schema: {schema_name}. Available: {list(SCHEMAS.keys())}"
+        )
     return SCHEMAS[schema_name]
+
 
 def get_schema_prompt_instruction(schema_name: str) -> str:
     """Get instruction text to append to prompts for JSON output."""
@@ -180,4 +186,4 @@ def get_schema_prompt_instruction(schema_name: str) -> str:
 IMPORTANT: Respond with valid JSON that matches this exact schema:
 {get_schema(schema_name)}
 
-Your response must be valid JSON only, no additional text or formatting.""" 
+Your response must be valid JSON only, no additional text or formatting."""

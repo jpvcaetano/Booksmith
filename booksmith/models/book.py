@@ -1,10 +1,14 @@
-from pydantic import BaseModel, Field
 from typing import List
-from .character import Character
+
+from pydantic import BaseModel, Field
+
 from .chapter import Chapter
+from .character import Character
+
 
 class Book(BaseModel):
     """A class to hold all the information about a book."""
+
     base_prompt: str
     language: str = "english"
     writing_style: str = "descriptive"
@@ -13,4 +17,4 @@ class Book(BaseModel):
     title: str = ""
     story_summary: str = ""
     characters: List[Character] = Field(default_factory=list)
-    chapters: List[Chapter] = Field(default_factory=list) 
+    chapters: List[Chapter] = Field(default_factory=list)

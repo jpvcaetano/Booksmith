@@ -8,4 +8,4 @@ from .book import Book
 from .chapter import Chapter
 from .character import Character
 
-__all__ = ["Book", "Chapter", "Character"] 
+__all__ = ["Book", "Chapter", "Character"]

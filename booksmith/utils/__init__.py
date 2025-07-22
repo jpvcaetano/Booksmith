@@ -1,1 +1,1 @@
-# Utils package for Booksmith 
+# Utils package for Booksmith

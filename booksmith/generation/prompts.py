@@ -1,11 +1,15 @@
+from typing import Any, Dict
+
 from jinja2 import Template
-from typing import Dict, Any
-from ..models import Book, Character, Chapter
+
+from ..models import Book, Chapter, Character
+
 
 class PromptTemplates:
     """Collection of prompt templates for book generation."""
-    
-    STORY_SUMMARY_TEMPLATE = Template("""
+
+    STORY_SUMMARY_TEMPLATE = Template(
+        """
 You are a professional book editor and story developer. Create a detailed story summary based on the following prompt.
 
 **Original Prompt:** {{ base_prompt }}
@@ -23,9 +27,11 @@ You are a professional book editor and story developer. Create a detailed story 
 4. Write in {{ language }}
 
 **Story Summary:**
-""")
+"""
+    )
 
-    CHARACTER_GENERATION_TEMPLATE = Template("""
+    CHARACTER_GENERATION_TEMPLATE = Template(
+        """
 You are a character development expert. Based on the story summary below, create detailed character profiles.
 
 **Story Summary:** {{ story_summary }}
@@ -53,9 +59,11 @@ Format each character as:
 ---
 
 **Characters:**
-""")
+"""
+    )
 
-    CHAPTER_PLAN_TEMPLATE = Template("""
+    CHAPTER_PLAN_TEMPLATE = Template(
+        """
 You are a professional book planner. Create a detailed chapter outline for the following story.
 
 **Story Summary:** {{ story_summary }}
@@ -87,9 +95,11 @@ Format as:
 **Plot Points:** [Key events]
 
 **Chapter Outline:**
-""")
+"""
+    )
 
-    CHAPTER_CONTENT_TEMPLATE = Template("""
+    CHAPTER_CONTENT_TEMPLATE = Template(
+        """
 You are a professional {{ genre }} author. Write the full content for this chapter of the book.
 
 **Story Context:**
@@ -150,9 +160,11 @@ You are a professional {{ genre }} author. Write the full content for this chapt
 - Make a smooth transition from the previous chapter
 {% endif %}                                          
 
-""")
+"""
+    )
 
-    TITLE_GENERATION_TEMPLATE = Template("""
+    TITLE_GENERATION_TEMPLATE = Template(
+        """
 You are a book marketing expert. Create an engaging title for this book.
 
 **Story Summary:** {{ story_summary }}
@@ -176,7 +188,9 @@ Generate 5 potential book titles that are:
 5. 
 
 **Recommended Title:** [Pick the best one and explain why]
-""")
+"""
+    )
+
 
 def generate_story_summary_prompt(book: Book) -> str:
     """Generate prompt for story summary creation."""
@@ -185,8 +199,9 @@ def generate_story_summary_prompt(book: Book) -> str:
         genre=book.genre,
         writing_style=book.writing_style,
         target_audience=book.target_audience,
-        language=book.language
+        language=book.language,
     )
+
 
 def generate_character_prompt(book: Book) -> str:
     """Generate prompt for character creation."""
@@ -194,8 +209,9 @@ def generate_character_prompt(book: Book) -> str:
         story_summary=book.story_summary,
         genre=book.genre,
         target_audience=book.target_audience,
-        writing_style=book.writing_style
+        writing_style=book.writing_style,
     )
+
 
 def generate_chapter_plan_prompt(book: Book) -> str:
     """Generate prompt for chapter planning."""
@@ -203,13 +219,18 @@ def generate_chapter_plan_prompt(book: Book) -> str:
         story_summary=book.story_summary,
         characters=book.characters,
         genre=book.genre,
-        target_audience=book.target_audience
+        target_audience=book.target_audience,
     )
+
 
 def generate_chapter_content_prompt(book: Book, chapter: Chapter) -> str:
     """Generate prompt for chapter content writing with full story context."""
 
-    active_characters = [character for character in book.characters if character.name in chapter.key_characters]
+    active_characters = [
+        character
+        for character in book.characters
+        if character.name in chapter.key_characters
+    ]
     print(f"Book: {book}")
     return PromptTemplates.CHAPTER_CONTENT_TEMPLATE.render(
         story_summary=book.story_summary,
@@ -223,15 +244,20 @@ def generate_chapter_content_prompt(book: Book, chapter: Chapter) -> str:
         language=book.language,
         # Enhanced context for story consistency
         all_chapters=book.chapters,
-        previous_chapter_content=book.chapters[chapter.chapter_number - 2].content[-500:] if chapter.chapter_number > 1 else "",
+        previous_chapter_content=book.chapters[chapter.chapter_number - 2].content[
+            -500:
+        ]
+        if chapter.chapter_number > 1
+        else "",
         current_chapter_number=chapter.chapter_number,
-        total_chapters=len(book.chapters)
+        total_chapters=len(book.chapters),
     )
+
 
 def generate_title_prompt(book: Book) -> str:
     """Generate prompt for title creation."""
     return PromptTemplates.TITLE_GENERATION_TEMPLATE.render(
         story_summary=book.story_summary,
         genre=book.genre,
-        target_audience=book.target_audience
-    ) 
+        target_audience=book.target_audience,
+    )
