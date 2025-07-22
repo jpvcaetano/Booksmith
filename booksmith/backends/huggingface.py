@@ -3,6 +3,9 @@ HuggingFace backend implementation for local models.
 """
 
 import logging
+from typing import Any, Dict, Optional
+
+import torch
 from .base import LLMBackend
 
 logger = logging.getLogger(__name__)

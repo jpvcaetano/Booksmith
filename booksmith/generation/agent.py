@@ -87,8 +87,6 @@ class WritingAgent:
             response = self._generate_structured(
                 prompt, 
                 schema_name="story_summary",
-                max_tokens=600,
-                temperature=0.7
             )
             
             book.story_summary = StructuredResponseParser.parse_story_summary(response)
@@ -114,8 +112,6 @@ class WritingAgent:
             response = self._generate_structured(
                 prompt, 
                 schema_name="character",
-                max_tokens=1200,
-                temperature=0.8
             )
             
             characters = StructuredResponseParser.parse_characters(response)
@@ -153,8 +149,6 @@ class WritingAgent:
             response = self._generate_structured(
                 prompt, 
                 schema_name="chapter_plan",
-                max_tokens=1500,
-                temperature=0.7
             )
             
             chapters = StructuredResponseParser.parse_chapter_plan(response)
@@ -174,18 +168,24 @@ class WritingAgent:
                     chapter_number=1,
                     title="The Beginning",
                     summary="The story begins",
+                    key_characters=[],
+                    plot_points=[],
                     content=""
                 ),
                 Chapter(
                     chapter_number=2,
                     title="The Journey",
                     summary="The adventure continues",
+                    key_characters=[],
+                    plot_points=[],
                     content=""
                 ),
                 Chapter(
                     chapter_number=3,
                     title="The End",
                     summary="The story concludes",
+                    key_characters=[],
+                    plot_points=[],
                     content=""
                 )
             ]
@@ -205,8 +205,6 @@ class WritingAgent:
             response = self._generate_structured(
                 prompt, 
                 schema_name="chapter_content",
-                max_tokens=2500,
-                temperature=0.8
             )
             
             chapter.content = StructuredResponseParser.parse_chapter_content(response)

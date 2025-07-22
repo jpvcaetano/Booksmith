@@ -9,7 +9,8 @@ from .prompts import (
     generate_character_prompt,
     generate_chapter_plan_prompt,
     generate_chapter_content_prompt,
-    generate_title_prompt
+    generate_title_prompt,
+    PromptTemplates
 )
 from .schemas import (
     CHARACTER_SCHEMA,
@@ -40,6 +41,7 @@ __all__ = [
     "generate_chapter_plan_prompt",
     "generate_chapter_content_prompt",
     "generate_title_prompt",
+    "PromptTemplates",
     
     # Schemas for structured output
     "CHARACTER_SCHEMA",
