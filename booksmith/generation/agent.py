@@ -11,7 +11,8 @@ from .prompts import (
     generate_chapter_content_prompt,
     generate_title_prompt
 )
-from .parsers import ResponseParser
+from .parsers import ResponseParser, StructuredResponseParser
+from .schemas import get_schema
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,25 @@ class WritingAgent:
         except Exception as e:
             logger.error(f"Text generation failed: {e}")
             return f"[ERROR: Generation failed - {str(e)}]"
+    
+    def _generate_structured(self, prompt: str, schema_name: str, **kwargs):
+        """Generate structured output with fallback to text generation."""
+        if not self.llm_backend:
+            logger.warning("No LLM backend available, returning placeholder")
+            return f"[PLACEHOLDER: {prompt[:100]}...]"
+        
+        try:
+            # Try structured generation if supported
+            if self.llm_backend.supports_structured_output():
+                schema = get_schema(schema_name)
+                return self.llm_backend.generate_structured(prompt, schema=schema, **kwargs)
+            else:
+                # Fallback to regular generation
+                logger.info(f"Backend doesn't support structured output, using regular generation")
+                return self.llm_backend.generate(prompt, **kwargs)
+        except Exception as e:
+            logger.error(f"Structured generation failed: {e}")
+            return f"[ERROR: Generation failed - {str(e)}]"
 
     def generate_story_summary(self, book: Book):
         """Generates a story summary for the book."""
@@ -64,13 +84,14 @@ class WritingAgent:
             prompt = generate_story_summary_prompt(book)
             logger.debug(f"Story summary prompt: {prompt[:200]}...")
             
-            response = self._generate_text(
+            response = self._generate_structured(
                 prompt, 
+                schema_name="story_summary",
                 max_tokens=600,
                 temperature=0.7
             )
             
-            book.story_summary = ResponseParser.parse_story_summary(response)
+            book.story_summary = StructuredResponseParser.parse_story_summary(response)
             print(f"✅ Story summary generated ({len(book.story_summary)} characters)")
             logger.info(f"Generated story summary: {book.story_summary[:100]}...")
             
@@ -90,13 +111,14 @@ class WritingAgent:
             prompt = generate_character_prompt(book)
             logger.debug(f"Character generation prompt: {prompt[:200]}...")
             
-            response = self._generate_text(
+            response = self._generate_structured(
                 prompt, 
+                schema_name="character",
                 max_tokens=1200,
                 temperature=0.8
             )
             
-            characters = ResponseParser.parse_characters(response)
+            characters = StructuredResponseParser.parse_characters(response)
             book.characters = characters
             
             print(f"✅ Generated {len(characters)} characters:")
@@ -128,13 +150,14 @@ class WritingAgent:
             prompt = generate_chapter_plan_prompt(book)
             logger.debug(f"Chapter plan prompt: {prompt[:200]}...")
             
-            response = self._generate_text(
+            response = self._generate_structured(
                 prompt, 
+                schema_name="chapter_plan",
                 max_tokens=1500,
                 temperature=0.7
             )
             
-            chapters = ResponseParser.parse_chapter_plan(response)
+            chapters = StructuredResponseParser.parse_chapter_plan(response)
             book.chapters = chapters
             
             print(f"✅ Generated plan for {len(chapters)} chapters:")
@@ -179,13 +202,14 @@ class WritingAgent:
             prompt = generate_chapter_content_prompt(book, chapter)
             logger.debug(f"Chapter content prompt: {prompt[:200]}...")
             
-            response = self._generate_text(
+            response = self._generate_structured(
                 prompt, 
+                schema_name="chapter_content",
                 max_tokens=2500,
                 temperature=0.8
             )
             
-            chapter.content = ResponseParser.parse_chapter_content(response)
+            chapter.content = StructuredResponseParser.parse_chapter_content(response)
             
             word_count = len(chapter.content.split())
             print(f"✅ Chapter {chapter.chapter_number} written ({word_count} words)")
@@ -207,13 +231,14 @@ class WritingAgent:
             prompt = generate_title_prompt(book)
             logger.debug(f"Title generation prompt: {prompt[:200]}...")
             
-            response = self._generate_text(
+            response = self._generate_structured(
                 prompt, 
+                schema_name="title",
                 max_tokens=300,
                 temperature=0.9
             )
             
-            book.title = ResponseParser.parse_title(response)
+            book.title = StructuredResponseParser.parse_title(response)
             print(f"✅ Book title generated: '{book.title}'")
             logger.info(f"Generated title: {book.title}")
             

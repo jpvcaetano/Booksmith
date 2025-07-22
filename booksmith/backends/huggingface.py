@@ -204,6 +204,90 @@ class HuggingFaceBackend(LLMBackend):
             logger.error(f"Generation failed: {e}")
             return f"Error: Failed to generate text - {str(e)}"
     
+    def generate_structured(self, prompt: str, schema: Optional[Dict[str, Any]] = None, **kwargs):
+        """Generate structured output with JSON instruction prompts."""
+        import json
+        from typing import Dict, Any, Optional, Union
+        
+        if not schema or not self.config.use_json_mode:
+            # Fall back to regular generation
+            return self.generate(prompt, **kwargs)
+        
+        # Add JSON instruction to prompt for better structured output
+        json_prompt = f"""{prompt}
+
+IMPORTANT: Respond with valid JSON that matches this exact schema:
+{json.dumps(schema, indent=2)}
+
+Your response must be valid JSON only, no additional text or formatting."""
+        
+        try:
+            response_text = self.generate(json_prompt, **kwargs)
+            
+            # Try to parse as JSON
+            try:
+                parsed_json = json.loads(response_text)
+                
+                # Basic validation if schema enforcement is enabled
+                if self.config.enforce_schema:
+                    self._validate_json_schema(parsed_json, schema)
+                
+                return parsed_json
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"Generated text is not valid JSON: {e}")
+                if self.config.enforce_schema:
+                    # Try to extract JSON from response
+                    extracted = self._extract_json_from_text(response_text)
+                    if extracted:
+                        return extracted
+                    raise ValueError(f"Generated invalid JSON: {e}")
+                return response_text
+                
+        except Exception as e:
+            logger.error(f"Structured generation failed: {e}")
+            if self.config.enforce_schema:
+                raise
+            return f"Error: Failed to generate structured output - {str(e)}"
+    
+    def _validate_json_schema(self, data: Dict[str, Any], schema: Dict[str, Any]) -> None:
+        """Basic JSON schema validation."""
+        try:
+            import jsonschema
+            jsonschema.validate(data, schema)
+        except ImportError:
+            logger.warning("jsonschema not installed, skipping validation")
+        except Exception as e:
+            logger.error(f"Schema validation failed: {e}")
+            raise ValueError(f"Response doesn't match schema: {e}")
+    
+    def _extract_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Try to extract JSON from text response."""
+        import json
+        import re
+        
+        # Look for JSON blocks in the text
+        json_patterns = [
+            r'```json\s*(.*?)\s*```',  # JSON code blocks
+            r'```\s*(.*?)\s*```',      # Generic code blocks
+            r'\{.*\}',                 # Any JSON object
+            r'\[.*\]'                  # Any JSON array
+        ]
+        
+        for pattern in json_patterns:
+            matches = re.findall(pattern, text, re.DOTALL)
+            for match in matches:
+                try:
+                    return json.loads(match.strip())
+                except json.JSONDecodeError:
+                    continue
+        
+        return None
+    
+    def supports_structured_output(self) -> bool:
+        """HuggingFace backend supports structured output via prompt engineering."""
+        return True
+    
     def is_available(self) -> bool:
         """Check if the model is loaded and ready."""
         return self.model is not None and self.tokenizer is not None
