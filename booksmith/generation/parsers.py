@@ -1,7 +1,9 @@
 import re
+import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from ..models import Book, Character, Chapter
+from .validation import StructuredOutputValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -216,3 +218,85 @@ class ResponseParser:
                     return title
         
         return "Untitled Book" 
+
+class StructuredResponseParser:
+    """Parser for structured JSON responses with validation and fallback to regex parsing."""
+    
+    @staticmethod
+    def parse_story_summary(response: Union[str, Dict[str, Any]]) -> str:
+        """Extract story summary from JSON or text response."""
+        # Try structured validation first
+        validation_result = StructuredOutputValidator.validate_and_parse(response, "story_summary")
+        
+        if validation_result.success:
+            if validation_result.corrected:
+                logger.info("Story summary was auto-corrected during validation")
+            return validation_result.data
+        else:
+            logger.warning(f"Structured validation failed: {validation_result.errors}")
+            # Fallback to regex parsing
+            return ResponseParser.parse_story_summary(str(response))
+    
+    @staticmethod
+    def parse_characters(response: Union[str, Dict[str, Any]]) -> List[Character]:
+        """Extract character list from JSON or text response."""
+        # Try structured validation first
+        validation_result = StructuredOutputValidator.validate_and_parse(response, "character")
+        
+        if validation_result.success:
+            if validation_result.corrected:
+                logger.info("Characters were auto-corrected during validation")
+            if validation_result.errors:
+                logger.warning(f"Some characters had validation issues: {validation_result.errors}")
+            return validation_result.data
+        else:
+            logger.warning(f"Structured validation failed: {validation_result.errors}")
+            # Fallback to regex parsing
+            return ResponseParser.parse_characters(str(response))
+    
+    @staticmethod
+    def parse_chapter_plan(response: Union[str, Dict[str, Any]]) -> List[Chapter]:
+        """Extract chapter plan from JSON or text response."""
+        # Try structured validation first
+        validation_result = StructuredOutputValidator.validate_and_parse(response, "chapter_plan")
+        
+        if validation_result.success:
+            if validation_result.corrected:
+                logger.info("Chapter plan was auto-corrected during validation")
+            if validation_result.errors:
+                logger.warning(f"Some chapters had validation issues: {validation_result.errors}")
+            return validation_result.data
+        else:
+            logger.warning(f"Structured validation failed: {validation_result.errors}")
+            # Fallback to regex parsing
+            return ResponseParser.parse_chapter_plan(str(response))
+    
+    @staticmethod
+    def parse_chapter_content(response: Union[str, Dict[str, Any]]) -> str:
+        """Extract chapter content from JSON or text response."""
+        # Try structured validation first
+        validation_result = StructuredOutputValidator.validate_and_parse(response, "chapter_content")
+        
+        if validation_result.success:
+            if validation_result.corrected:
+                logger.info("Chapter content was auto-corrected during validation")
+            return validation_result.data
+        else:
+            logger.warning(f"Structured validation failed: {validation_result.errors}")
+            # Fallback to regex parsing
+            return ResponseParser.parse_chapter_content(str(response))
+    
+    @staticmethod
+    def parse_title(response: Union[str, Dict[str, Any]]) -> str:
+        """Extract book title from JSON or text response."""
+        # Try structured validation first
+        validation_result = StructuredOutputValidator.validate_and_parse(response, "title")
+        
+        if validation_result.success:
+            if validation_result.corrected:
+                logger.info("Title was auto-corrected during validation")
+            return validation_result.data
+        else:
+            logger.warning(f"Structured validation failed: {validation_result.errors}")
+            # Fallback to regex parsing
+            return ResponseParser.parse_title(str(response)) 

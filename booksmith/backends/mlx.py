@@ -74,6 +74,32 @@ class MLXBackend(LLMBackend):
             logger.error(f"MLX generation failed: {e}")
             return f"Error: Failed to generate text - {str(e)}"
     
+    def supports_structured_output(self) -> bool:
+        """MLX backend supports structured output via prompt engineering."""
+        return True
+    
+    def generate_structured(self, prompt: str, schema=None, **kwargs):
+        """Generate structured output with JSON instruction prompts."""
+        if not schema or not self.config.use_json_mode:
+            return self.generate(prompt, **kwargs)
+        
+        import json
+        json_prompt = f"""{prompt}
+
+IMPORTANT: Respond with valid JSON that matches this exact schema:
+{json.dumps(schema, indent=2)}
+
+Your response must be valid JSON only, no additional text or formatting."""
+        
+        try:
+            response_text = self.generate(json_prompt, **kwargs)
+            try:
+                return json.loads(response_text)
+            except json.JSONDecodeError:
+                return response_text
+        except Exception as e:
+            return f"Error: Failed to generate structured output - {str(e)}"
+    
     def is_available(self) -> bool:
         """Check if MLX model is loaded and ready."""
         return self.model is not None and self.tokenizer is not None
