@@ -3,7 +3,7 @@ from typing import Optional
 from tqdm import tqdm
 
 from ..models import Book, Chapter
-from ..backends import LLMConfig, create_llm_backend, LLMBackend
+from .openai import LLMConfig, OpenAIBackend
 from .prompts import (
     generate_story_summary_prompt,
     generate_character_prompt,
@@ -22,22 +22,21 @@ class WritingAgent:
     def __init__(self, llm_config: Optional[LLMConfig] = None):
         """Initialize the writing agent with LLM configuration."""
         if llm_config is None:
-            # Default configuration for testing
+            # Default configuration for OpenAI
             llm_config = LLMConfig(
-                backend="huggingface",
-                model_name="microsoft/DialoGPT-medium",
+                model_name="gpt-4.1",
                 max_tokens=1000,
                 temperature=0.7
             )
         
         self.llm_config = llm_config
-        self.llm_backend: Optional[LLMBackend] = None
+        self.llm_backend: Optional[OpenAIBackend] = None
         self._initialize_backend()
     
     def _initialize_backend(self):
         """Initialize the LLM backend."""
         try:
-            self.llm_backend = create_llm_backend(self.llm_config)
+            self.llm_backend = OpenAIBackend(self.llm_config)
             if not self.llm_backend.is_available():
                 logger.warning("LLM backend not available, falling back to placeholder mode")
                 self.llm_backend = None
@@ -297,12 +296,12 @@ class WritingAgent:
         
         base_info = {
             "status": "available" if self.llm_backend.is_available() else "not_available",
-            "backend": self.llm_config.backend,
+            "backend": "openai",  # We only have OpenAI backend now
             "model": self.llm_config.model_name,
-            "device": self.llm_config.device
+            "device": "cloud"  # OpenAI is cloud-based
         }
         
-        # Add detailed model info for HuggingFace backend
+        # Add detailed model info if backend supports it
         if hasattr(self.llm_backend, 'get_model_info'):
             model_info = self.llm_backend.get_model_info()
             base_info.update(model_info)

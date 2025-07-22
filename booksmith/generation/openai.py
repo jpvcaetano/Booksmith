@@ -5,15 +5,26 @@ OpenAI API backend implementation.
 import json
 import logging
 from typing import Dict, Any, Union, Optional
-from .base import LLMBackend
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-class OpenAIBackend(LLMBackend):
+class LLMConfig(BaseModel):
+    """Configuration for OpenAI LLM backend."""
+    model_name: str = "gpt-4.1"  # Default to a good OpenAI model
+    max_tokens: int = 1000
+    temperature: float = 0.7
+    api_key: Optional[str] = None
+    api_base: Optional[str] = None
+    # Structured output settings
+    use_json_mode: bool = True  # Enable JSON structured output when available
+    enforce_schema: bool = True  # Enforce strict schema validation
+
+class OpenAIBackend:
     """OpenAI API backend with structured output support."""
     
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config: LLMConfig):
+        self.config = config
         self.client = None
         self._setup_client()
     
