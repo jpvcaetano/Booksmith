@@ -132,7 +132,7 @@ class PydanticValidator:
             "background_story": "No background provided",
             "appearance": "No description provided", 
             "personality": "No personality described",
-            "other_characteristics": ""
+            "role": ""
         }
         
         for field, default in field_defaults.items():
@@ -146,7 +146,10 @@ class PydanticValidator:
             "description": "appearance",
             "physical_description": "appearance",
             "traits": "personality",
-            "character_traits": "personality"
+            "character_traits": "personality",
+            "story_role": "role",
+            "character_role": "role",
+            "other_characteristics": "role"  # For backward compatibility
         }
         
         for old_field, new_field in field_mappings.items():
@@ -174,12 +177,24 @@ class PydanticValidator:
         if "content" not in corrected:
             corrected["content"] = ""
         
+        # Ensure new fields exist with defaults
+        if "key_characters" not in corrected:
+            corrected["key_characters"] = []
+        
+        if "plot_points" not in corrected:
+            corrected["plot_points"] = []
+        
         # Handle field mappings
         field_mappings = {
             "description": "summary",
             "chapter_summary": "summary",
             "number": "chapter_number",
-            "chapter_title": "title"
+            "chapter_title": "title",
+            "characters": "key_characters",
+            "main_characters": "key_characters",
+            "plot": "plot_points",
+            "events": "plot_points",
+            "key_events": "plot_points"
         }
         
         for old_field, new_field in field_mappings.items():

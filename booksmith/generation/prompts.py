@@ -62,13 +62,16 @@ You are a professional book planner. Create a detailed chapter outline for the f
 
 **Characters:**
 {% for character in characters %}
-- {{ character.name }}: {{ character.personality }}
+- **{{ character.name }}**: {{ character.personality }}
+  - Background: {{ character.background_story }}
+  - Appearance: {{ character.appearance }}
+  {% if character.role %}- Role: {{ character.role }}{% endif %}
 {% endfor %}
 
 **Book Details:**
 - Genre: {{ genre }}
 - Target Audience: {{ target_audience }}
-- Target Length: 8-12 chapters
+- Target Length: number of chapters should make sense for the story
 
 **Instructions:**
 Create a chapter-by-chapter outline. For each chapter, provide:
@@ -92,26 +95,61 @@ You are a professional {{ genre }} author. Write the full content for this chapt
 **Story Context:**
 {{ story_summary }}
 
-**Chapter Details:**
+**CURRENT CHAPTER FOCUS:**
 - Chapter {{ chapter_number }}: {{ chapter_title }}
 - Chapter Summary: {{ chapter_summary }}
+- Position in Story: {% if chapter_number == 1 %}Opening chapter - establish setting, introduce main characters{% elif chapter_number == total_chapters %}Final chapter - resolution and conclusion{% elif chapter_number <= total_chapters // 3 %}Early story - character introduction and setup{% elif chapter_number <= (total_chapters * 2) // 3 %}Middle story - conflict development and complications{% else %}Late story - building toward climax and resolution{% endif %}
+
+**STORY ARC CONTEXT:**
+{% if chapter_number > 1 %}
+**What happened in previous chapters:**
+{% for ch in all_chapters %}
+{% if ch.chapter_number < current_chapter_number %}
+- Chapter {{ ch.chapter_number }}: {{ ch.summary }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if chapter_number < total_chapters %}
+**What needs to happen in upcoming chapters:**
+{% for ch in all_chapters %}
+{% if ch.chapter_number > current_chapter_number %}
+- Chapter {{ ch.chapter_number }}: {{ ch.summary }}
+{% endif %}
+{% endfor %}
+
+**IMPORTANT:** This chapter must set up events and character development that lead naturally into the next chapters while maintaining story continuity.
+{% endif %}
 
 **Characters in this chapter:**
 {% for character in characters %}
-- {{ character.name }}: {{ character.personality }}
+- **{{ character.name }}**: {{ character.personality }}
+  - Background: {{ character.background_story }}
+  - Appearance: {{ character.appearance }}
+  {% if character.role %}- Role: {{ character.role }}{% endif %}
 {% endfor %}
+                                        
+{% if chapter_number > 1 %}
+**Last 500 characters of the previous chapter:**
+{{ previous_chapter_content }}
+{% endif %}                            
 
 **Writing Guidelines:**
 - Genre: {{ genre }}
 - Writing Style: {{ writing_style }}
 - Target Audience: {{ target_audience }}
 - Language: {{ language }}
-- Length: 1500-2500 words
 - Use descriptive, engaging prose
 - Include dialogue where appropriate
 - Maintain consistency with the story summary and character personalities
+- CRITICAL: Ensure this chapter flows naturally from previous chapters and sets up upcoming chapters
+- Reference events from previous chapters when relevant
+- Plant seeds for future chapter developments when appropriate
+- Do not include the chapter name in the content
+{% if chapter_number > 1 %}
+- Make a smooth transition from the previous chapter
+{% endif %}                                          
 
-**Chapter Content:**
 """)
 
     TITLE_GENERATION_TEMPLATE = Template("""
@@ -169,17 +207,25 @@ def generate_chapter_plan_prompt(book: Book) -> str:
     )
 
 def generate_chapter_content_prompt(book: Book, chapter: Chapter) -> str:
-    """Generate prompt for chapter content writing."""
+    """Generate prompt for chapter content writing with full story context."""
+
+    active_characters = [character for character in book.characters if character.name in chapter.key_characters]
+    print(f"Book: {book}")
     return PromptTemplates.CHAPTER_CONTENT_TEMPLATE.render(
         story_summary=book.story_summary,
         chapter_number=chapter.chapter_number,
         chapter_title=chapter.title,
         chapter_summary=chapter.summary,
-        characters=book.characters,
+        characters=active_characters,
         genre=book.genre,
         writing_style=book.writing_style,
         target_audience=book.target_audience,
-        language=book.language
+        language=book.language,
+        # Enhanced context for story consistency
+        all_chapters=book.chapters,
+        previous_chapter_content=book.chapters[chapter.chapter_number - 2].content[-500:] if chapter.chapter_number > 1 else "",
+        current_chapter_number=chapter.chapter_number,
+        total_chapters=len(book.chapters)
     )
 
 def generate_title_prompt(book: Book) -> str:

@@ -51,7 +51,7 @@ def create_book_epub(book: Book, output_dir: str = "generated_books") -> str:
 
 
 def create_epub_file(book: Book, output_path: Path) -> None:
-    """Create an EPUB file with all chapters."""
+    """Create an EPUB file with separate chapters and linear reading flow."""
     try:
         from ebooklib import epub
     except ImportError:
@@ -65,88 +65,119 @@ def create_epub_file(book: Book, output_path: Path) -> None:
     epub_book.set_title(book.title or "Untitled Book")
     epub_book.set_language(book.language)
     
+    # Set reading direction and page progression
+    epub_book.set_direction('default')
+    
     # Add author (you could extend the Book model to include author)
     epub_book.add_author("Booksmith AI")
     
-    # Create single HTML file with all content
-    all_content = f"""
+    # Create title page
+    title_content = f"""
     <html>
     <head>
         <title>{book.title or "Untitled Book"}</title>
         <style>
-            body {{ font-family: serif; margin: 2em; line-height: 1.6; }}
-            h1 {{ text-align: center; color: #2c3e50; margin: 2em 0; }}
-            p {{ text-align: justify; margin: 1em 0; }}
-            .chapter {{ page-break-before: always; }}
-            .chapter:first-child {{ page-break-before: avoid; }}
+            body {{ font-family: serif; margin: 2em; line-height: 1.6; text-align: center; }}
+            h1 {{ color: #2c3e50; margin: 3em 0; font-size: 2.5em; }}
+            .info {{ margin: 2em 0; font-size: 1.1em; color: #666; }}
         </style>
     </head>
     <body>
         <h1>{book.title or "Untitled Book"}</h1>
-        
-        {create_chapters_section(book.chapters)}
+        <div class="info">
+            <p>Genre: {book.genre}</p>
+            <p>Target Audience: {book.target_audience}</p>
+            <p>Writing Style: {book.writing_style}</p>
+        </div>
     </body>
     </html>
     """
     
-    # Create single chapter file
-    main_chapter = epub.EpubHtml(title='Book Content', file_name='content.xhtml', content=all_content)
-    epub_book.add_item(main_chapter)
-    chapters = [main_chapter]
-    spine = ['nav', 'content']
+    # Create title page chapter
+    title_chapter = epub.EpubHtml(title='Title Page', file_name='title.xhtml', content=title_content)
+    epub_book.add_item(title_chapter)
     
-    # Create table of contents
-    epub_book.toc = [(epub.Section('Book Content'), chapters)]
+    # Create chapters list for linear reading
+    epub_chapters = []
+    toc_entries = [title_chapter]
     
-    # Add default NCX and Nav files
-    epub_book.add_item(epub.EpubNcx())
-    epub_book.add_item(epub.EpubNav())
+    # Filter and sort chapters with content
+    content_chapters = [ch for ch in book.chapters if ch.content.strip()]
+    content_chapters.sort(key=lambda x: x.chapter_number)
     
-    # Define spine
-    epub_book.spine = spine
+    # Create individual chapters with navigation links
+    for i, chapter in enumerate(content_chapters):
+        # Determine previous and next chapters for navigation
+        prev_chapter = content_chapters[i-1] if i > 0 else None
+        next_chapter = content_chapters[i+1] if i < len(content_chapters) - 1 else None
+        
+        # Build navigation links
+        nav_links = ""
+        if prev_chapter:
+            nav_links += f'<link rel="prev" href="chapter_{prev_chapter.chapter_number:03d}.xhtml" />'
+        if next_chapter:
+            nav_links += f'<link rel="next" href="chapter_{next_chapter.chapter_number:03d}.xhtml" />'
+        
+        chapter_content = f"""
+        <html>
+        <head>
+            <title>Chapter {chapter.chapter_number}: {chapter.title}</title>
+            {nav_links}
+            <style>
+                body {{ font-family: serif; margin: 2em; line-height: 1.6; }}
+                h1 {{ text-align: center; color: #2c3e50; margin: 2em 0; }}
+                p {{ text-align: justify; margin: 1em 0; }}
+            </style>
+        </head>
+        <body>
+            <h1>Chapter {chapter.chapter_number}: {chapter.title}</h1>
+            {format_chapter_content(chapter.content)}
+        </body>
+        </html>
+        """
+        
+        # Create EPUB chapter
+        chapter_filename = f"chapter_{chapter.chapter_number:03d}.xhtml"
+        epub_chapter = epub.EpubHtml(
+            title=f"Chapter {chapter.chapter_number}: {chapter.title}",
+            file_name=chapter_filename,
+            content=chapter_content
+        )
+        
+        epub_book.add_item(epub_chapter)
+        epub_chapters.append(epub_chapter)
+        toc_entries.append(epub_chapter)
+    
+    # Create table of contents (less intrusive)
+    epub_book.toc = toc_entries
+    
+    # Add navigation files
+    nav_chapter = epub.EpubNav()
+    epub_book.add_item(nav_chapter)
+    
+    ncx_chapter = epub.EpubNcx()
+    epub_book.add_item(ncx_chapter)
+    
+    # Define spine with linear reading order
+    # Title page first, then all chapters in linear sequence
+    spine_items = [
+        title_chapter,  # Title page
+        nav_chapter,    # Navigation (accessible but not interrupting flow)
+    ]
+    
+    # Add all content chapters to spine with linear="yes" for sequential reading
+    spine_items.extend(epub_chapters)
+    
+    epub_book.spine = spine_items
     
     # Write EPUB file
     epub.write_epub(str(output_path), epub_book)
 
 
-def create_characters_section(characters) -> str:
-    """Create the characters section HTML."""
-    if not characters:
-        return ""
-    
-    char_content = '<h2>Characters</h2>'
-    
-    for character in characters:
-        char_content += f"""
-        <div class="character">
-            <h3>{character.name}</h3>
-            {f'<p><strong>Background:</strong> {character.background_story}</p>' if character.background_story else ''}
-            {f'<p><strong>Appearance:</strong> {character.appearance}</p>' if character.appearance else ''}
-            {f'<p><strong>Personality:</strong> {character.personality}</p>' if character.personality else ''}
-            {f'<p><strong>Other Characteristics:</strong> {character.other_characteristics}</p>' if character.other_characteristics else ''}
-        </div>
-        """
-    
-    return char_content
 
 
-def create_chapters_section(chapters) -> str:
-    """Create the chapters section HTML."""
-    if not chapters:
-        return ""
-    
-    chapters_content = '<h2>Chapters</h2>'
-    
-    for chapter in chapters:
-        if chapter.content.strip():
-            chapters_content += f"""
-            <div class="chapter">
-                <h1>{chapter.chapter_number}: {chapter.title}</h1>
-                {format_chapter_content(chapter.content)}
-            </div>
-            """
-    
-    return chapters_content
+
+
 
 
 def format_chapter_content(content: str) -> str:
@@ -190,8 +221,8 @@ def create_book_info_text(book: Book, output_path: Path) -> None:
                     f.write(f"Appearance: {character.appearance}\n")
                 if character.personality:
                     f.write(f"Personality: {character.personality}\n")
-                if character.other_characteristics:
-                    f.write(f"Other: {character.other_characteristics}\n")
+                if character.role:
+                    f.write(f"Role: {character.role}\n")
                 f.write("\n")
         
         if book.chapters:
@@ -201,6 +232,10 @@ def create_book_info_text(book: Book, output_path: Path) -> None:
                 f.write(f"Chapter {chapter.chapter_number}: {chapter.title}\n")
                 if chapter.summary:
                     f.write(f"  Summary: {chapter.summary}\n")
+                if chapter.key_characters:
+                    f.write(f"  Key Characters: {', '.join(chapter.key_characters)}\n")
+                if chapter.plot_points:
+                    f.write(f"  Plot Points: {'; '.join(chapter.plot_points)}\n")
                 f.write("\n")
 
 

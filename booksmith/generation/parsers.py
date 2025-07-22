@@ -138,6 +138,8 @@ class ResponseParser:
                     chapter_number=chapter_num,
                     title=title,
                     summary=summary,
+                    key_characters=[],  # Will be populated by structured parsing
+                    plot_points=[],     # Will be populated by structured parsing
                     content=""  # Content will be generated later
                 )
                 chapters.append(chapter)
@@ -172,6 +174,8 @@ class ResponseParser:
                         chapter_number=chapter_num,
                         title=title,
                         summary=f"Chapter {chapter_num} content",
+                        key_characters=[],  # Fallback - no character info available
+                        plot_points=[],     # Fallback - no plot points available
                         content=""
                     )
                     chapters.append(chapter)
@@ -280,7 +284,21 @@ class StructuredResponseParser:
         if validation_result.success:
             if validation_result.corrected:
                 logger.info("Chapter content was auto-corrected during validation")
-            return validation_result.data
+            
+            # Handle enhanced chapter content response
+            if isinstance(validation_result.data, dict):
+                content = validation_result.data.get("content", "")
+                
+                # Log optional metadata if present
+                if "continuity_notes" in validation_result.data:
+                    logger.info(f"Chapter continuity notes: {validation_result.data['continuity_notes']}")
+                if "character_development" in validation_result.data:
+                    logger.info(f"Character development notes: {validation_result.data['character_development']}")
+                
+                return content
+            else:
+                # Direct content string
+                return validation_result.data
         else:
             logger.warning(f"Structured validation failed: {validation_result.errors}")
             # Fallback to regex parsing
