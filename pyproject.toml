@@ -1,35 +1,40 @@
 [tool.poetry]
 name = "booksmith"
 version = "0.1.0"
-description = "A project to generate books from prompts"
-authors = ["Joao Caetano <jpvcaetano@gmail.com>"]
+description = "AI-powered book generation tool"
+authors = ["João Caetano"]
 readme = "README.md"
 packages = [{include = "booksmith"}]
 
 [tool.poetry.dependencies]
-python = ">=3.9.0,<3.14"
+python = "^3.9"
+openai = "^1.0.0"
+python-dotenv = "^1.0.0"
+ebooklib = "^0.18"
 pydantic = "^2.0.0"
-numpy = "^1.26.0"  # Compatible with Python 3.13 on Apple Silicon
-# LLM Libraries
-transformers = "^4.36.0"  # Hugging Face models
-torch = "^2.0.0"  # PyTorch for local models
-accelerate = "^0.25.0"  # For GPU acceleration and model loading
-bitsandbytes = {version = "^0.41.0", optional = true}  # For quantization
-# Apple Silicon Optimization
-mlx-lm = {version = "^0.18.0", optional = true}  # Apple MLX framework for local models
-# API clients (optional)
-openai = {version = "^1.0.0", optional = true}
-# Utilities
-requests = "^2.31.0"
-tqdm = "^4.66.0"  # Progress bars for generation
-jinja2 = "^3.1.0"  # Template engine for prompts
-python-dotenv = "^1.0.0"  # For loading environment variables from .env files
-# Jupyter/Notebook support
+
+[tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
-ipykernel = "^6.26.0"
-# EPUB generation
-ebooklib = "^0.18.0"
+ipykernel = "^6.25.0"
+pytest = "^7.0.0"
+black = "^23.0.0"
+isort = "^5.12.0"
+mypy = "^1.5.0"
 
 [build-system]
 requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api" 
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true 
