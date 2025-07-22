@@ -2,6 +2,7 @@
 Book generation system with structured LLM output support.
 """
 
+from .openai import LLMConfig, OpenAIBackend
 from .agent import WritingAgent
 from .parsers import ResponseParser, StructuredResponseParser
 from .prompts import (
@@ -28,6 +29,10 @@ from .validation import (
 )
 
 __all__ = [
+    # Backend
+    "LLMConfig",
+    "OpenAIBackend",
+    
     # Core components
     "WritingAgent",
     

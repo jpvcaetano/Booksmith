@@ -7,15 +7,9 @@ A structured, class-based approach to generating complete books using AI/LLM tec
 # Core data models
 from .models import Book, Chapter, Character
 
-# LLM backends
-from .backends import (
+# LLM backend  
+from .generation import (
     LLMConfig, 
-    LLMBackend,
-    create_llm_backend,
-    RECOMMENDED_MODELS,
-    MODEL_CATEGORIES,
-    HuggingFaceBackend,
-    MLXBackend,
     OpenAIBackend,
 )
 
@@ -34,14 +28,8 @@ __all__ = [
     "Chapter", 
     "Character",
     
-    # LLM backends
+    # LLM backend
     "LLMConfig",
-    "LLMBackend",
-    "create_llm_backend",
-    "RECOMMENDED_MODELS",
-    "MODEL_CATEGORIES",
-    "HuggingFaceBackend",
-    "MLXBackend", 
     "OpenAIBackend",
     
     # Generation
