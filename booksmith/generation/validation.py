@@ -16,19 +16,17 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class ValidationResult:
-    """Result of validation with optional corrections."""
+    """Result of validation."""
 
     def __init__(
         self,
         success: bool,
         data: Any = None,
         errors: List[str] = None,
-        corrected: bool = False,
     ):
         self.success = success
         self.data = data
         self.errors = errors or []
-        self.corrected = corrected
 
 
 class PydanticValidator:
@@ -52,39 +50,19 @@ class PydanticValidator:
 
             validated_characters = []
             errors = []
-            corrected = False
 
             for i, char_data in enumerate(char_list):
                 try:
-                    # Try direct validation first
                     character = Character.model_validate(char_data)
                     validated_characters.append(character)
-
                 except ValidationError as e:
-                    # Try auto-correction
-                    corrected_data = PydanticValidator._auto_correct_character(
-                        char_data
-                    )
-                    try:
-                        character = Character.model_validate(corrected_data)
-                        validated_characters.append(character)
-                        corrected = True
-                        logger.info(
-                            f"Auto-corrected character {i}: {corrected_data.get('name', 'Unknown')}"
-                        )
-                    except ValidationError as e2:
-                        errors.append(f"Character {i}: {str(e2)}")
-                        logger.error(f"Failed to validate character {i}: {e2}")
+                    errors.append(f"Character {i}: {str(e)}")
+                    logger.error(f"Failed to validate character {i}: {e}")
 
-            if errors and not validated_characters:
+            if errors:
                 return ValidationResult(success=False, errors=errors)
 
-            return ValidationResult(
-                success=True,
-                data=validated_characters,
-                errors=errors if errors else None,
-                corrected=corrected,
-            )
+            return ValidationResult(success=True, data=validated_characters)
 
         except Exception as e:
             return ValidationResult(
@@ -108,132 +86,24 @@ class PydanticValidator:
 
             validated_chapters = []
             errors = []
-            corrected = False
 
             for i, chapter_data in enumerate(chapter_list):
                 try:
                     chapter = Chapter.model_validate(chapter_data)
                     validated_chapters.append(chapter)
-
                 except ValidationError as e:
-                    # Try auto-correction
-                    corrected_data = PydanticValidator._auto_correct_chapter(
-                        chapter_data, i + 1
-                    )
-                    try:
-                        chapter = Chapter.model_validate(corrected_data)
-                        validated_chapters.append(chapter)
-                        corrected = True
-                        logger.info(
-                            f"Auto-corrected chapter {i + 1}: {corrected_data.get('title', 'Untitled')}"
-                        )
-                    except ValidationError as e2:
-                        errors.append(f"Chapter {i + 1}: {str(e2)}")
-                        logger.error(f"Failed to validate chapter {i + 1}: {e2}")
+                    errors.append(f"Chapter {i + 1}: {str(e)}")
+                    logger.error(f"Failed to validate chapter {i + 1}: {e}")
 
-            if errors and not validated_chapters:
+            if errors:
                 return ValidationResult(success=False, errors=errors)
 
-            return ValidationResult(
-                success=True,
-                data=validated_chapters,
-                errors=errors if errors else None,
-                corrected=corrected,
-            )
+            return ValidationResult(success=True, data=validated_chapters)
 
         except Exception as e:
             return ValidationResult(
                 success=False, errors=[f"Validation failed: {str(e)}"]
             )
-
-    @staticmethod
-    def _auto_correct_character(char_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Auto-correct common character data issues."""
-        corrected = char_data.copy()
-
-        # Ensure all required fields exist with defaults
-        field_defaults = {
-            "name": "Unknown Character",
-            "background_story": "No background provided",
-            "appearance": "No description provided",
-            "personality": "No personality described",
-            "role": "",
-        }
-
-        for field, default in field_defaults.items():
-            if (
-                field not in corrected
-                or not corrected[field]
-                or corrected[field].strip() == ""
-            ):
-                corrected[field] = default
-
-        # Handle common field name variations
-        field_mappings = {
-            "background": "background_story",
-            "backstory": "background_story",
-            "description": "appearance",
-            "physical_description": "appearance",
-            "traits": "personality",
-            "character_traits": "personality",
-            "story_role": "role",
-            "character_role": "role",
-            "other_characteristics": "role",  # For backward compatibility
-        }
-
-        for old_field, new_field in field_mappings.items():
-            if old_field in corrected and new_field not in corrected:
-                corrected[new_field] = corrected[old_field]
-                del corrected[old_field]
-
-        return corrected
-
-    @staticmethod
-    def _auto_correct_chapter(
-        chapter_data: Dict[str, Any], chapter_num: int
-    ) -> Dict[str, Any]:
-        """Auto-correct common chapter data issues."""
-        corrected = chapter_data.copy()
-
-        # Ensure required fields
-        if "chapter_number" not in corrected:
-            corrected["chapter_number"] = chapter_num
-
-        if "title" not in corrected or not corrected["title"]:
-            corrected["title"] = f"Chapter {chapter_num}"
-
-        if "summary" not in corrected or not corrected["summary"]:
-            corrected["summary"] = f"Chapter {chapter_num} content"
-
-        if "content" not in corrected:
-            corrected["content"] = ""
-
-        # Ensure new fields exist with defaults
-        if "key_characters" not in corrected:
-            corrected["key_characters"] = []
-
-        if "plot_points" not in corrected:
-            corrected["plot_points"] = []
-
-        # Handle field mappings
-        field_mappings = {
-            "description": "summary",
-            "chapter_summary": "summary",
-            "number": "chapter_number",
-            "chapter_title": "title",
-            "characters": "key_characters",
-            "main_characters": "key_characters",
-            "plot": "plot_points",
-            "events": "plot_points",
-            "key_events": "plot_points",
-        }
-
-        for old_field, new_field in field_mappings.items():
-            if old_field in corrected and new_field not in corrected:
-                corrected[new_field] = corrected[old_field]
-                del corrected[old_field]
-
-        return corrected
 
 
 class StructuredOutputValidator:

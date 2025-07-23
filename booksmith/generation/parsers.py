@@ -228,7 +228,7 @@ class ResponseParser:
         """Extract book title from LLM response."""
         # Look for recommended title or first title in list
         patterns = [
-            r"(?:\*\*)?Recommended Title(?:\*\*)?:?\s*([^\n]+)",
+            r"(?:\*\*)?Recommended Title(?:\*\*)?:?\s*\*{0,2}([^\n*]+)\*{0,2}",
             r"(?:\*\*)?Best Title(?:\*\*)?:?\s*([^\n]+)",
             r"\d+\.\s*([^\n]+)",  # First numbered item
             r"Title:?\s*([^\n]+)",
@@ -257,8 +257,6 @@ class StructuredResponseParser:
         )
 
         if validation_result.success:
-            if validation_result.corrected:
-                logger.info("Story summary was auto-corrected during validation")
             return validation_result.data
         else:
             logger.warning(f"Structured validation failed: {validation_result.errors}")
@@ -274,8 +272,6 @@ class StructuredResponseParser:
         )
 
         if validation_result.success:
-            if validation_result.corrected:
-                logger.info("Characters were auto-corrected during validation")
             if validation_result.errors:
                 logger.warning(
                     f"Some characters had validation issues: {validation_result.errors}"
@@ -295,8 +291,6 @@ class StructuredResponseParser:
         )
 
         if validation_result.success:
-            if validation_result.corrected:
-                logger.info("Chapter plan was auto-corrected during validation")
             if validation_result.errors:
                 logger.warning(
                     f"Some chapters had validation issues: {validation_result.errors}"
@@ -316,9 +310,6 @@ class StructuredResponseParser:
         )
 
         if validation_result.success:
-            if validation_result.corrected:
-                logger.info("Chapter content was auto-corrected during validation")
-
             # Handle enhanced chapter content response
             if isinstance(validation_result.data, dict):
                 content = validation_result.data.get("content", "")
@@ -351,8 +342,6 @@ class StructuredResponseParser:
         )
 
         if validation_result.success:
-            if validation_result.corrected:
-                logger.info("Title was auto-corrected during validation")
             return validation_result.data
         else:
             logger.warning(f"Structured validation failed: {validation_result.errors}")
