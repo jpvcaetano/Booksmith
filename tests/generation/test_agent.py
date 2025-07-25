@@ -5,6 +5,7 @@ import pytest
 from booksmith.generation.agent import WritingAgent
 from booksmith.generation.openai import LLMConfig
 from booksmith.models import Book, Chapter, Character
+from booksmith.utils.validators import DependencyValidationError
 
 
 class TestWritingAgent:
@@ -76,10 +77,8 @@ class TestWritingAgent:
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        result = agent._generate_text("Test prompt")
-
-        assert result.startswith("[PLACEHOLDER:")
-        assert "Test prompt" in result
+        with pytest.raises(Exception, match="No LLM backend available"):
+            agent._generate_text("Test prompt")
 
     def test_generate_text_backend_error(self, llm_config):
         """Test text generation with backend error."""
@@ -89,10 +88,8 @@ class TestWritingAgent:
         mock_backend.generate.side_effect = Exception("Generation failed")
         agent.llm_backend = mock_backend
 
-        result = agent._generate_text("Test prompt")
-
-        assert result.startswith("[ERROR:")
-        assert "Generation failed" in result
+        with pytest.raises(Exception, match="Generation failed"):
+            agent._generate_text("Test prompt")
 
     def test_generate_structured_success(self, llm_config):
         """Test successful structured generation."""
@@ -151,10 +148,8 @@ class TestWritingAgent:
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        agent.generate_story_summary(minimal_book)
-
-        # Should contain placeholder instead of error message
-        assert "[PLACEHOLDER:" in minimal_book.story_summary
+        with pytest.raises(Exception, match="No LLM backend available"):
+            agent.generate_story_summary(minimal_book)
 
     def test_generate_characters(self, minimal_book, llm_config):
         """Test character generation."""
@@ -184,25 +179,22 @@ class TestWritingAgent:
         """Test character generation without story summary."""
         agent = WritingAgent(llm_config)
 
-        with pytest.raises(ValueError, match="Story summary must be generated"):
+        with pytest.raises(
+            DependencyValidationError,
+            match="Missing dependencies for characters: story_summary",
+        ):
             agent.generate_characters(minimal_book)
 
-    def test_generate_characters_error(self, minimal_book, llm_config):
+    def test_generate_characters_error(self, book_with_summary, llm_config):
         """Test character generation error handling."""
-        minimal_book.story_summary = "A story"
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        agent.generate_characters(minimal_book)
+        with pytest.raises(Exception):
+            agent.generate_characters(book_with_summary)
 
-        # Should create fallback character
-        assert len(minimal_book.characters) == 1
-        # Character name starts with [PLACEHOLDER due to parsing fallback
-        assert minimal_book.characters[0].name.startswith("[PLACEHOLDER:")
-
-    def test_generate_chapter_plan(self, minimal_book, llm_config):
+    def test_generate_chapter_plan(self, book_with_summary_and_characters, llm_config):
         """Test chapter plan generation."""
-        minimal_book.story_summary = "A story with chapters"
         agent = WritingAgent(llm_config)
 
         mock_backend = Mock()
@@ -219,34 +211,36 @@ class TestWritingAgent:
             ) as mock_parser:
                 mock_parser.parse_chapter_plan.return_value = mock_chapters
 
-                agent.generate_chapter_plan(minimal_book)
+                agent.generate_chapter_plan(book_with_summary_and_characters)
 
-                assert len(minimal_book.chapters) == 2
-                assert minimal_book.chapters[0].title == "Chapter 1"
+                assert len(book_with_summary_and_characters.chapters) == 2
+                assert book_with_summary_and_characters.chapters[0].title == "Chapter 1"
 
     def test_generate_chapter_plan_no_summary(self, minimal_book, llm_config):
         """Test chapter plan generation without story summary."""
         agent = WritingAgent(llm_config)
 
-        with pytest.raises(ValueError, match="Story summary must be generated"):
+        with pytest.raises(
+            DependencyValidationError,
+            match="Missing dependencies for chapter_plan: story_summary",
+        ):
             agent.generate_chapter_plan(minimal_book)
 
-    def test_generate_chapter_plan_error(self, minimal_book, llm_config):
+    def test_generate_chapter_plan_error(
+        self, book_with_summary_and_characters, llm_config
+    ):
         """Test chapter plan generation error handling."""
-        minimal_book.story_summary = "A story"
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        agent.generate_chapter_plan(minimal_book)
+        with pytest.raises(Exception, match="No LLM backend available"):
+            agent.generate_chapter_plan(book_with_summary_and_characters)
 
-        # Structured response parser returns empty list on placeholder response
-        # So no fallback chapters are created
-        assert len(minimal_book.chapters) == 0
-
-    def test_write_chapter_content(self, minimal_book, llm_config):
+    def test_write_chapter_content(
+        self, book_with_summary_and_characters_and_chapter_plan, llm_config
+    ):
         """Test chapter content writing."""
-        minimal_book.story_summary = "A story"
-        chapter = Chapter(chapter_number=1, title="Test Chapter")
+        chapter = book_with_summary_and_characters_and_chapter_plan.chapters[0]
         agent = WritingAgent(llm_config)
 
         mock_backend = Mock()
@@ -259,7 +253,9 @@ class TestWritingAgent:
             ) as mock_parser:
                 mock_parser.parse_chapter_content.return_value = "Chapter content here"
 
-                agent.write_chapter_content(minimal_book, chapter)
+                agent.write_chapter_content(
+                    book_with_summary_and_characters_and_chapter_plan, chapter
+                )
 
                 assert chapter.content == "Chapter content here"
 
@@ -268,20 +264,24 @@ class TestWritingAgent:
         chapter = Chapter(chapter_number=1, title="Test Chapter")
         agent = WritingAgent(llm_config)
 
-        with pytest.raises(ValueError, match="Story summary must be available"):
+        with pytest.raises(
+            DependencyValidationError,
+            match="Missing dependencies for chapter_content: story_summary",
+        ):
             agent.write_chapter_content(minimal_book, chapter)
 
-    def test_write_chapter_content_error(self, minimal_book, llm_config):
+    def test_write_chapter_content_error(
+        self, book_with_summary_and_characters_and_chapter_plan, llm_config
+    ):
         """Test chapter content writing error handling."""
-        minimal_book.story_summary = "A story"
-        chapter = Chapter(chapter_number=1, title="Test Chapter")
+        chapter = book_with_summary_and_characters_and_chapter_plan.chapters[0]
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        agent.write_chapter_content(minimal_book, chapter)
-
-        # Should contain placeholder response
-        assert "[PLACEHOLDER:" in chapter.content
+        with pytest.raises(Exception, match="No LLM backend available"):
+            agent.write_chapter_content(
+                book_with_summary_and_characters_and_chapter_plan, chapter
+            )
 
     def test_generate_title(self, minimal_book, llm_config):
         """Test title generation."""
@@ -306,19 +306,20 @@ class TestWritingAgent:
         """Test title generation without story summary."""
         agent = WritingAgent(llm_config)
 
-        with pytest.raises(ValueError, match="Story summary must be available"):
+        with pytest.raises(
+            DependencyValidationError,
+            match="Missing dependencies for title: story_summary",
+        ):
             agent.generate_title(minimal_book)
 
-    def test_generate_title_error(self, minimal_book, llm_config):
+    def test_generate_title_error(self, book_with_summary, llm_config):
         """Test title generation error handling."""
-        minimal_book.story_summary = "A story"
+        book_with_summary.story_summary = "A story"
         agent = WritingAgent(llm_config)
         agent.llm_backend = None
 
-        agent.generate_title(minimal_book)
-
-        # Should get a parsed title from placeholder response
-        assert minimal_book.title != ""
+        with pytest.raises(Exception, match="No LLM backend available"):
+            agent.generate_title(book_with_summary)
 
     def test_write_full_book(self, minimal_book, llm_config):
         """Test full book writing integration."""
@@ -367,27 +368,6 @@ class TestWritingAgent:
                             mock_plan.assert_called_once()
                             mock_content.assert_called_once()
 
-    def test_write_full_book_with_existing_content(self, sample_book, llm_config):
-        """Test full book writing with pre-existing content."""
-        agent = WritingAgent(llm_config)
-
-        # Book already has all content
-        with patch.object(agent, "generate_story_summary") as mock_summary:
-            with patch.object(agent, "generate_title") as mock_title:
-                with patch.object(agent, "generate_characters") as mock_chars:
-                    with patch.object(agent, "generate_chapter_plan") as mock_plan:
-                        with patch.object(
-                            agent, "write_chapter_content"
-                        ) as mock_content:
-                            agent.write_full_book(sample_book)
-
-                            # Should not call generation methods for existing content
-                            mock_summary.assert_not_called()
-                            mock_title.assert_not_called()
-                            mock_chars.assert_not_called()
-                            mock_plan.assert_not_called()
-                            mock_content.assert_not_called()
-
     def test_get_backend_info(self, llm_config):
         """Test getting backend information."""
         agent = WritingAgent(llm_config)
@@ -413,41 +393,3 @@ class TestWritingAgent:
 
         assert info["status"] == "not_available"
         assert info["backend"] == "none"
-
-    def test_clear_cache(self, llm_config):
-        """Test clearing model cache."""
-        agent = WritingAgent(llm_config)
-
-        mock_backend = Mock()
-        agent.llm_backend = mock_backend
-
-        agent.clear_cache()
-
-        # Should call clear_cache if method exists
-        if hasattr(mock_backend, "clear_cache"):
-            mock_backend.clear_cache.assert_called_once()
-
-    def test_get_memory_usage(self, llm_config):
-        """Test getting memory usage information."""
-        agent = WritingAgent(llm_config)
-
-        # Test with memory info available
-        mock_backend = Mock()
-        mock_backend.is_available.return_value = True
-        agent.llm_backend = mock_backend
-
-        with patch.object(agent, "get_backend_info") as mock_info:
-            mock_info.return_value = {"memory_usage_gb": 2.5}
-
-            usage = agent.get_memory_usage()
-            assert usage == "2.5 GB"
-
-    def test_get_memory_usage_unknown(self, llm_config):
-        """Test getting memory usage when unknown."""
-        agent = WritingAgent(llm_config)
-
-        with patch.object(agent, "get_backend_info") as mock_info:
-            mock_info.return_value = {}
-
-            usage = agent.get_memory_usage()
-            assert usage == "Unknown"

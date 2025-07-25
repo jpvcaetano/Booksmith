@@ -98,6 +98,57 @@ def minimal_book():
 
 
 @pytest.fixture
+def book_with_summary():
+    """A book with a summary."""
+    return Book(base_prompt="A simple story", story_summary="A simple story")
+
+
+@pytest.fixture
+def book_with_summary_and_characters():
+    """A book with a summary and characters."""
+    return Book(
+        base_prompt="A simple story",
+        story_summary="A simple story",
+        characters=[
+            Character(
+                name="Alice",
+                background_story="A young mage discovering her powers.",
+                appearance="Short with red hair and green eyes.",
+                personality="Curious and brave.",
+                role="Protagonist",
+            )
+        ],
+    )
+
+
+@pytest.fixture
+def book_with_summary_and_characters_and_chapter_plan():
+    """A book with a summary, characters, and chapters."""
+    return Book(
+        base_prompt="A simple story",
+        story_summary="A simple story",
+        characters=[
+            Character(
+                name="Alice",
+                background_story="A young mage discovering her powers.",
+                appearance="Short with red hair and green eyes.",
+                personality="Curious and brave.",
+                role="Protagonist",
+            )
+        ],
+        chapters=[
+            Chapter(
+                chapter_number=1,
+                title="Chapter 1",
+                summary="Chapter 1 summary",
+                key_characters=["Alice"],
+                plot_points=["Chapter 1 plot point"],
+            )
+        ],
+    )
+
+
+@pytest.fixture
 def llm_config():
     """Sample LLM configuration for testing."""
     return LLMConfig(
