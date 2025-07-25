@@ -4,6 +4,7 @@ from typing import Optional
 from tqdm import tqdm
 
 from ..models import Book, Chapter
+from ..utils.validators import GenerationStep, validate_generation_step
 from .openai import LLMConfig, OpenAIBackend
 from .parsers import ResponseParser, StructuredResponseParser
 from .prompts import (
@@ -50,19 +51,19 @@ class WritingAgent:
         """Generate text using the configured LLM backend."""
         if not self.llm_backend:
             logger.warning("No LLM backend available, returning placeholder")
-            return f"[PLACEHOLDER: {prompt[:100]}...]"
+            raise Exception("No LLM backend available")
 
         try:
             return self.llm_backend.generate(prompt, **kwargs)
         except Exception as e:
             logger.error(f"Text generation failed: {e}")
-            return f"[ERROR: Generation failed - {str(e)}]"
+            raise
 
     def _generate_structured(self, prompt: str, schema_name: str, **kwargs):
         """Generate structured output with fallback to text generation."""
         if not self.llm_backend:
             logger.warning("No LLM backend available, returning placeholder")
-            return f"[PLACEHOLDER: {prompt[:100]}...]"
+            raise Exception("No LLM backend available")
 
         try:
             # Try structured generation if supported
@@ -79,10 +80,11 @@ class WritingAgent:
                 return self.llm_backend.generate(prompt, **kwargs)
         except Exception as e:
             logger.error(f"Structured generation failed: {e}")
-            return f"[ERROR: Generation failed - {str(e)}]"
+            raise
 
     def generate_story_summary(self, book: Book):
         """Generates a story summary for the book."""
+        validate_generation_step(book, GenerationStep.SUMMARY)
         print("🔍 Generating story summary...")
 
         try:
@@ -100,13 +102,11 @@ class WritingAgent:
 
         except Exception as e:
             logger.error(f"Story summary generation failed: {e}")
-            book.story_summary = f"Error generating story summary: {str(e)}"
-            print("❌ Story summary generation failed")
+            raise
 
     def generate_characters(self, book: Book):
         """Generates characters for the book."""
-        if not book.story_summary:
-            raise ValueError("Story summary must be generated before characters")
+        validate_generation_step(book, GenerationStep.CHARACTERS)
 
         print("👥 Generating characters...")
 
@@ -130,23 +130,11 @@ class WritingAgent:
 
         except Exception as e:
             logger.error(f"Character generation failed: {e}")
-            # Fallback: create a basic character
-            from ..models import Character
-
-            book.characters = [
-                Character(
-                    name="Protagonist",
-                    background_story="A brave hero on a journey",
-                    appearance="Determined and strong",
-                    personality="Courageous and kind",
-                )
-            ]
-            print("❌ Character generation failed, using fallback")
+            raise
 
     def generate_chapter_plan(self, book: Book):
         """Generates a chapter plan for the book."""
-        if not book.story_summary:
-            raise ValueError("Story summary must be generated before chapter plan")
+        validate_generation_step(book, GenerationStep.CHAPTER_PLAN)
 
         print("📋 Generating chapter plan...")
 
@@ -170,39 +158,13 @@ class WritingAgent:
 
         except Exception as e:
             logger.error(f"Chapter plan generation failed: {e}")
-            # Fallback: create basic chapters
-            book.chapters = [
-                Chapter(
-                    chapter_number=1,
-                    title="The Beginning",
-                    summary="The story begins",
-                    key_characters=[],
-                    plot_points=[],
-                    content="",
-                ),
-                Chapter(
-                    chapter_number=2,
-                    title="The Journey",
-                    summary="The adventure continues",
-                    key_characters=[],
-                    plot_points=[],
-                    content="",
-                ),
-                Chapter(
-                    chapter_number=3,
-                    title="The End",
-                    summary="The story concludes",
-                    key_characters=[],
-                    plot_points=[],
-                    content="",
-                ),
-            ]
-            print("❌ Chapter plan generation failed, using fallback")
+            raise
 
     def write_chapter_content(self, book: Book, chapter: Chapter):
         """Writes the content for a chapter."""
-        if not book.story_summary:
-            raise ValueError("Story summary must be available before writing chapters")
+        validate_generation_step(
+            book, GenerationStep.CHAPTER_CONTENT, chapter.chapter_number
+        )
 
         print(f"✍️  Writing Chapter {chapter.chapter_number}: {chapter.title}")
 
@@ -225,13 +187,11 @@ class WritingAgent:
 
         except Exception as e:
             logger.error(f"Chapter content generation failed: {e}")
-            chapter.content = f"[Chapter {chapter.chapter_number} content generation failed: {str(e)}]"
-            print(f"❌ Chapter {chapter.chapter_number} generation failed")
+            raise
 
     def generate_title(self, book: Book):
         """Generates a title for the book."""
-        if not book.story_summary:
-            raise ValueError("Story summary must be available before generating title")
+        validate_generation_step(book, GenerationStep.TITLE)
 
         print("📚 Generating book title...")
 
@@ -249,8 +209,7 @@ class WritingAgent:
 
         except Exception as e:
             logger.error(f"Title generation failed: {e}")
-            book.title = "The Generated Story"
-            print("❌ Title generation failed, using fallback")
+            raise
 
     def write_full_book(self, book: Book):
         """Writes the full book."""
@@ -258,28 +217,23 @@ class WritingAgent:
 
         try:
             # Step 1: Generate story summary
-            if not book.story_summary:
-                self.generate_story_summary(book)
+            self.generate_story_summary(book)
 
             # Step 2: Generate title
-            if not book.title:
-                self.generate_title(book)
+            self.generate_title(book)
 
             # Step 3: Generate characters
-            if not book.characters:
-                self.generate_characters(book)
+            self.generate_characters(book)
 
             # Step 4: Generate chapter plan
-            if not book.chapters:
-                self.generate_chapter_plan(book)
+            self.generate_chapter_plan(book)
 
             # Step 5: Write chapter content
             chapters_to_write = [ch for ch in book.chapters if not ch.content]
-            if chapters_to_write:
-                print(f"\n📝 Writing content for {len(chapters_to_write)} chapters...")
+            print(f"\n📝 Writing content for {len(chapters_to_write)} chapters...")
 
-                for chapter in tqdm(chapters_to_write, desc="Writing chapters"):
-                    self.write_chapter_content(book, chapter)
+            for chapter in tqdm(chapters_to_write, desc="Writing chapters"):
+                self.write_chapter_content(book, chapter)
 
             # Summary
             total_words = sum(
@@ -321,15 +275,3 @@ class WritingAgent:
             base_info.update(model_info)
 
         return base_info
-
-    def clear_cache(self):
-        """Clear model cache to free memory."""
-        if self.llm_backend and hasattr(self.llm_backend, "clear_cache"):
-            self.llm_backend.clear_cache()
-
-    def get_memory_usage(self) -> str:
-        """Get human-readable memory usage info."""
-        info = self.get_backend_info()
-        if "memory_usage_gb" in info:
-            return f"{info['memory_usage_gb']:.1f} GB"
-        return "Unknown"
