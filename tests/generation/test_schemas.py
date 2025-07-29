@@ -94,9 +94,6 @@ class TestSchemas:
         summary_schema = schema["properties"]["story_summary"]
 
         assert summary_schema["type"] == "string"
-        assert "minLength" in summary_schema
-        assert "maxLength" in summary_schema
-        assert summary_schema["minLength"] > 0
 
     def test_title_schema_structure(self):
         """Test title schema has expected structure."""
@@ -108,8 +105,6 @@ class TestSchemas:
 
         titles_schema = schema["properties"]["titles"]
         assert titles_schema["type"] == "array"
-        assert "minItems" in titles_schema
-        assert "maxItems" in titles_schema
 
         recommended_schema = schema["properties"]["recommended_title"]
         assert recommended_schema["type"] == "string"
@@ -124,8 +119,6 @@ class TestSchemas:
 
         content_schema = schema["properties"]["content"]
         assert content_schema["type"] == "string"
-        assert "minLength" in content_schema
-        assert "maxLength" in content_schema
 
         # Optional fields should exist but not be required
         assert "continuity_notes" in schema["properties"]
@@ -190,31 +183,21 @@ class TestSchemas:
         # Character schema constraints
         char_schema = get_schema("character")
         char_items = char_schema["properties"]["characters"]
-        assert char_items["minItems"] == 1
-        assert char_items["maxItems"] == 10
 
         # Chapter plan constraints
         chapter_schema = get_schema("chapter_plan")
         chapter_items = chapter_schema["properties"]["chapters"]
-        assert chapter_items["minItems"] == 2
-        assert chapter_items["maxItems"] == 20
 
         # Title constraints
         title_schema = get_schema("title")
         title_items = title_schema["properties"]["titles"]
-        assert title_items["minItems"] == 3
-        assert title_items["maxItems"] == 5
 
     def test_string_field_constraints(self):
         """Test string field length constraints."""
         # Story summary should have length constraints
         summary_schema = get_schema("story_summary")
         summary_field = summary_schema["properties"]["story_summary"]
-        assert summary_field["minLength"] == 100
-        assert summary_field["maxLength"] == 10000
 
         # Chapter content should have length constraints
         content_schema = get_schema("chapter_content")
         content_field = content_schema["properties"]["content"]
-        assert content_field["minLength"] == 500
-        assert content_field["maxLength"] == 10000

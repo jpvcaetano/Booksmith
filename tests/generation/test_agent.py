@@ -17,7 +17,7 @@ class TestWritingAgent:
             agent = WritingAgent()
 
             assert agent.llm_config.model_name == "gpt-4.1"
-            assert agent.llm_config.max_tokens == 1000
+            assert agent.llm_config.max_tokens == 32768
             assert agent.llm_config.temperature == 0.7
 
     def test_initialization_custom_config(self, llm_config):

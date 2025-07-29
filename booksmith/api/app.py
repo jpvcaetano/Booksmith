@@ -13,11 +13,12 @@ load_dotenv()
 
 from importlib.metadata import metadata, version
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from ..generation import LLMConfig, WritingAgent
 from ..models import Book
+from ..utils.auth import get_current_user
 from ..utils.validators import (
     DependencyValidationError,
     GenerationStep,
@@ -98,11 +99,14 @@ async def root():
 
 
 @app.post("/generate/summary", response_model=GenerateSummaryResponse)
-async def generate_summary(request: GenerateSummaryRequest):
+async def generate_summary(
+    request: GenerateSummaryRequest, current_user: str = Depends(get_current_user)
+):
     """Generate a story summary and create a new book."""
     try:
-        # Create a new book
+        # Create a new book with user association
         book_id, book = state_manager.create_book(
+            user_id=current_user,  # Associate with authenticated user
             base_prompt=request.base_prompt,
             language=request.language,
             writing_style=request.writing_style,
@@ -117,7 +121,7 @@ async def generate_summary(request: GenerateSummaryRequest):
         writing_agent.generate_story_summary(book)
 
         # Update the book in state
-        state_manager.update_book(book_id, book)
+        state_manager.update_book(current_user, book_id, book)
 
         return GenerateSummaryResponse(
             book_id=book_id, story_summary=book.story_summary
@@ -133,11 +137,13 @@ async def generate_summary(request: GenerateSummaryRequest):
 
 
 @app.post("/generate/title", response_model=GenerateTitleResponse)
-async def generate_title(request: BookIdRequest):
+async def generate_title(
+    request: BookIdRequest, current_user: str = Depends(get_current_user)
+):
     """Generate a book title (requires existing summary)."""
     try:
         # Get the book
-        book = state_manager.get_book(request.book_id)
+        book = state_manager.get_book(current_user, request.book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
 
@@ -148,7 +154,7 @@ async def generate_title(request: BookIdRequest):
         writing_agent.generate_title(book)
 
         # Update the book in state
-        state_manager.update_book(request.book_id, book)
+        state_manager.update_book(current_user, request.book_id, book)
 
         return GenerateTitleResponse(book_id=request.book_id, title=book.title)
 
@@ -165,11 +171,13 @@ async def generate_title(request: BookIdRequest):
 
 
 @app.post("/generate/characters", response_model=GenerateCharactersResponse)
-async def generate_characters(request: BookIdRequest):
+async def generate_characters(
+    request: BookIdRequest, current_user: str = Depends(get_current_user)
+):
     """Generate character profiles (requires existing summary)."""
     try:
         # Get the book
-        book = state_manager.get_book(request.book_id)
+        book = state_manager.get_book(current_user, request.book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
 
@@ -180,7 +188,7 @@ async def generate_characters(request: BookIdRequest):
         writing_agent.generate_characters(book)
 
         # Update the book in state
-        state_manager.update_book(request.book_id, book)
+        state_manager.update_book(current_user, request.book_id, book)
 
         return GenerateCharactersResponse(
             book_id=request.book_id, characters=book.characters
@@ -199,11 +207,13 @@ async def generate_characters(request: BookIdRequest):
 
 
 @app.post("/generate/chapter-plan", response_model=GenerateChapterPlanResponse)
-async def generate_chapter_plan(request: BookIdRequest):
+async def generate_chapter_plan(
+    request: BookIdRequest, current_user: str = Depends(get_current_user)
+):
     """Generate chapter outline (requires existing summary)."""
     try:
         # Get the book
-        book = state_manager.get_book(request.book_id)
+        book = state_manager.get_book(current_user, request.book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
 
@@ -214,7 +224,7 @@ async def generate_chapter_plan(request: BookIdRequest):
         writing_agent.generate_chapter_plan(book)
 
         # Update the book in state
-        state_manager.update_book(request.book_id, book)
+        state_manager.update_book(current_user, request.book_id, book)
 
         return GenerateChapterPlanResponse(
             book_id=request.book_id, chapters=book.chapters
@@ -233,11 +243,14 @@ async def generate_chapter_plan(request: BookIdRequest):
 
 
 @app.post("/generate/chapter-content", response_model=GenerateChapterContentResponse)
-async def generate_chapter_content(request: GenerateChapterContentRequest):
+async def generate_chapter_content(
+    request: GenerateChapterContentRequest,
+    current_user: str = Depends(get_current_user),
+):
     """Generate chapter content (enforces sequential order)."""
     try:
         # Get the book
-        book = state_manager.get_book(request.book_id)
+        book = state_manager.get_book(current_user, request.book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
 
@@ -256,7 +269,7 @@ async def generate_chapter_content(request: GenerateChapterContentRequest):
         writing_agent.write_chapter_content(book, target_chapter)
 
         # Update the book in state
-        state_manager.update_book(request.book_id, book)
+        state_manager.update_book(current_user, request.book_id, book)
 
         return GenerateChapterContentResponse(
             book_id=request.book_id,
@@ -278,22 +291,29 @@ async def generate_chapter_content(request: GenerateChapterContentRequest):
 
 
 @app.get("/books/{book_id}", response_model=BookStateResponse)
-async def get_book(book_id: UUID):
-    """Retrieve the complete state of a book."""
+async def get_book(book_id: UUID, current_user: str = Depends(get_current_user)):
+    """Retrieve a book, ensuring user owns it."""
     try:
-        book = state_manager.get_book(book_id)
-
-        # Validate book exists (reusing our validator for consistency)
+        book = state_manager.get_book(current_user, book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Book not found")
-
         return BookStateResponse.from_book(book_id, book)
-
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Book retrieval failed: {e}")
         raise HTTPException(status_code=500, detail=f"Book retrieval failed: {str(e)}")
+
+
+@app.get("/users/me/books")
+async def get_my_books(current_user: str = Depends(get_current_user)):
+    """Get all books for the current user."""
+    try:
+        books = state_manager.list_user_books(current_user)
+        return {"books": books}
+    except Exception as e:
+        logger.error(f"Failed to get user books: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve books")
 
 
 @app.get("/health")
@@ -303,5 +323,5 @@ async def health_check():
     return {
         "status": "healthy",
         "backend": backend_info,
-        "books_in_memory": len(state_manager.list_books()),
+        "firestore": "connected",
     }

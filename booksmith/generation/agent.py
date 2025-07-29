@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Optional
 
 from tqdm import tqdm
@@ -27,7 +28,10 @@ class WritingAgent:
         if llm_config is None:
             # Default configuration for OpenAI
             llm_config = LLMConfig(
-                model_name="gpt-4.1", max_tokens=1000, temperature=0.7
+                model_name="gpt-4.1",
+                max_tokens=32768,
+                temperature=0.7,
+                api_key=os.environ.get("OPENAI_API_KEY"),
             )
 
         self.llm_config = llm_config

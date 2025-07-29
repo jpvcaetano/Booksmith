@@ -38,8 +38,6 @@ CHARACTER_SCHEMA = {
                 "required": ["name", "background_story", "appearance", "personality"],
                 "additionalProperties": False,
             },
-            "minItems": 1,
-            "maxItems": 10,
         }
     },
     "required": ["characters"],
@@ -72,13 +70,11 @@ CHAPTER_PLAN_SCHEMA = {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of main characters involved in this chapter",
-                        "maxItems": 8,
                     },
                     "plot_points": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of important plot points and key events in this chapter",
-                        "maxItems": 6,
                     },
                 },
                 "required": [
@@ -90,8 +86,6 @@ CHAPTER_PLAN_SCHEMA = {
                 ],
                 "additionalProperties": False,
             },
-            "minItems": 2,
-            "maxItems": 20,
         }
     },
     "required": ["chapters"],
@@ -105,8 +99,6 @@ STORY_SUMMARY_SCHEMA = {
         "story_summary": {
             "type": "string",
             "description": "Comprehensive story summary (300-500 words) including main plot, conflict, and resolution",
-            "minLength": 100,
-            "maxLength": 10000,
         }
     },
     "required": ["story_summary"],
@@ -119,16 +111,12 @@ TITLE_SCHEMA = {
     "properties": {
         "titles": {
             "type": "array",
-            "items": {"type": "string", "minLength": 5, "maxLength": 100},
-            "minItems": 3,
-            "maxItems": 5,
+            "items": {"type": "string"},
             "description": "List of 3-5 creative book title suggestions",
         },
         "recommended_title": {
             "type": "string",
             "description": "The best title from the list",
-            "minLength": 5,
-            "maxLength": 100,
         },
     },
     "required": ["titles", "recommended_title"],
@@ -142,18 +130,14 @@ CHAPTER_CONTENT_SCHEMA = {
         "content": {
             "type": "string",
             "description": "Complete chapter content (1000-10000 words) that maintains story continuity",
-            "minLength": 500,
-            "maxLength": 10000,
         },
         "continuity_notes": {
             "type": "string",
             "description": "Optional notes about how this chapter connects to previous/future chapters",
-            "maxLength": 500,
         },
         "character_development": {
             "type": "string",
             "description": "Optional notes about character development in this chapter",
-            "maxLength": 500,
         },
     },
     "required": ["content"],
