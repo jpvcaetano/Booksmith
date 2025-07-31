@@ -61,5 +61,7 @@ jobs:
 
     # Run the test suite
     - name: Run tests with pytest
+      env:
+        FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
       run: poetry run pytest tests/ -v
 
