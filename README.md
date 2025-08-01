@@ -2,14 +2,17 @@
 
 AI-powered book generation library that creates complete novels from simple prompts using OpenAI's GPT models.
 
+![Booksmith Front Page](images/front_page.png)
+
 ## Features
 
 - **Complete Book Generation**: Characters, plot, chapters, and EPUB output
-- **OpenAI Integration**: High-quality generation using GPT models
+- **OpenAI Integration**: High-quality generation using GPT models with automatic retry logic
 - **REST API**: FastAPI-based web service for remote book generation
 - **Structured Output**: Reliable JSON generation with validation
 - **EPUB Export**: Professional ebook files with proper chapter structure
 - **Jupyter Integration**: Interactive notebooks for experimentation
+- **Robust Error Handling**: Automatic retries with timeout protection and progress feedback
 
 ## Quick Start
 
@@ -27,10 +30,13 @@ poetry install
 import os
 from booksmith import Book, WritingAgent, LLMConfig
 
-# Configure OpenAI
+# Configure OpenAI with retry settings
 config = LLMConfig(
     model_name="gpt-4",
-    api_key=os.environ.get("OPENAI_API_KEY")
+    api_key=os.environ.get("OPENAI_API_KEY"),
+    timeout_seconds=60,  # Request timeout
+    max_retries=3,       # Retry attempts
+    retry_delay=5.0      # Delay between retries
 )
 
 # Create agent and book
@@ -41,7 +47,11 @@ book = Book(
     language="english"
 )
 
-# Generate complete book
+# Generate complete book with progress feedback
+def progress_callback(message: str):
+    print(f"📝 {message}")
+
+agent = WritingAgent(config, progress_callback=progress_callback)
 agent.write_full_book(book)
 
 # Export to EPUB
@@ -76,6 +86,7 @@ The API will be available at `http://localhost:8000` with:
 
 - Python 3.13+
 - OpenAI API key
+- Internet connection for API calls
 
 ## Environment Setup
 
@@ -93,6 +104,15 @@ OPENAI_API_KEY=your_openai_api_key_here
 5. **Content Writing** - Writes full chapters with continuity
 6. **EPUB Export** - Creates professional ebook files
 
+### Error Handling
+
+The generation process includes robust error handling:
+- **Automatic Retries**: Failed API calls are retried up to 3 times
+- **Timeout Protection**: 60-second timeout prevents hanging requests
+- **Partial Success**: Generation continues even if some steps fail
+- **Progress Feedback**: Real-time updates during long operations
+- **Manual Retry**: Individual chapters can be regenerated if needed
+
 ## Interactive Notebooks
 
 ```bash
@@ -103,9 +123,10 @@ jupyter notebook notebooks/book_generation.ipynb
 
 ```
 booksmith/
-├── generation/     # Core generation engine
+├── generation/     # Core generation engine with retry logic
 ├── models/         # Book, Chapter, Character models  
-└── utils/          # EPUB generation
+├── utils/          # EPUB generation
+└── web/           # Streamlit web interface
 ```
 
 ## License

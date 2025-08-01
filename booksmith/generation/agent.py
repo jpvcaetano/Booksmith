@@ -154,7 +154,7 @@ class WritingAgent:
 
             book.story_summary = StructuredResponseParser.parse_story_summary(response)
             message = (
-                f"✅ Story summary generated ({len(book.story_summary)} characters)"
+                f"✅ Story summary generated.)"
             )
             self._report_progress(message)
             logger.info(f"Generated story summary: {book.story_summary[:100]}...")
@@ -184,8 +184,6 @@ class WritingAgent:
 
             message = f"✅ Generated {len(characters)} characters"
             self._report_progress(message)
-            for char in characters:
-                self._report_progress(f"  - {char.name}")
 
             logger.info(f"Generated {len(characters)} characters")
 
@@ -214,10 +212,6 @@ class WritingAgent:
 
             message = f"✅ Generated plan for {len(chapters)} chapters"
             self._report_progress(message)
-            for chapter in chapters:
-                self._report_progress(
-                    f"  Chapter {chapter.chapter_number}: {chapter.title}"
-                )
 
             logger.info(f"Generated plan for {len(chapters)} chapters")
 
@@ -248,7 +242,7 @@ class WritingAgent:
             chapter.content = StructuredResponseParser.parse_chapter_content(response)
 
             word_count = len(chapter.content.split())
-            message = f"✅ Chapter {chapter.chapter_number} written ({word_count} words)"
+            message = f"✅ Chapter {chapter.chapter_number} written.)"
             self._report_progress(message)
             logger.info(
                 f"Chapter {chapter.chapter_number} content generated: {word_count} words"

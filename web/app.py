@@ -8,6 +8,8 @@ import sys
 import logging
 from pathlib import Path
 
+from booksmith.models.book import Book
+
 # Add project root to Python path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -280,9 +282,7 @@ def generate_book(base_prompt, genre, target_audience, language, writing_style):
             if not agent.llm_backend or not agent.llm_backend.is_available():
                 st.error("❌ AI Writing Agent not available. Please check your OpenAI API configuration.")
                 return
-        
-        progress_callback("📖 Starting book generation with retry support...")
-        
+                
         try:
             # Generate full book using the agent's robust method
             agent.write_full_book(book)
@@ -537,10 +537,7 @@ def show_book_viewer():
         col1, col2 = st.columns([4, 1])
         with col1:
             st.markdown(f"### {chapter_titles[selected_chapter]}")
-        with col2:
-            # Add regenerate button for individual chapters
-            if st.button(f"🔄 Regenerate", key=f"regen_ch_{chapter.chapter_number}"):
-                regenerate_single_chapter(book_id, chapter.chapter_number)
+
         
         if chapter.content:
             # Format the content nicely
@@ -593,8 +590,7 @@ def regenerate_single_chapter(book_id: str, chapter_number: int):
         
         # Update the book in storage
         state_manager = BookStateManager()
-        # Note: We'd need to add an update method to BookStateManager
-        # For now, we'll update the session state
+        state_manager.update_book(st.session_state.user_data['uid'], book_id, book)
         
         progress_bar.progress(100)
         status_text.text("✅ Chapter regenerated!")
