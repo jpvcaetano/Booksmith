@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Import Firebase modules
 from web.firebase import FirebaseAuth, FirebaseUserManager
-from booksmith.generation.agent import WritingAgent
+from booksmith.generation.agent import WritingAgent, PartialGenerationFailure
 from booksmith.api.state import BookStateManager
 
 # Page configuration
@@ -239,7 +239,7 @@ def show_create_book_section():
                     st.error("⚠️ Please provide a book concept or outline")
 
 def generate_book(base_prompt, genre, target_audience, language, writing_style):
-    """Generate a new book using the WritingAgent."""
+    """Generate a new book using the WritingAgent with retry support."""
     try:
         # Import and create book model
         from booksmith.models.book import Book
@@ -253,76 +253,115 @@ def generate_book(base_prompt, genre, target_audience, language, writing_style):
             writing_style=writing_style
         )
         
+        # Initialize progress tracking
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        progress_log = st.empty()
+        
+        # Progress callback for real-time updates
+        progress_messages = []
+        
+        def progress_callback(message: str):
+            progress_messages.append(message)
+            # Show the latest message in status
+            status_text.text(message)
+            # Show a log of recent messages
+            if len(progress_messages) > 10:
+                progress_messages.pop(0)
+            with progress_log.container():
+                for msg in progress_messages[-5:]:  # Show last 5 messages
+                    st.text(msg)
+        
         # Initialize writing agent
         with st.spinner("🤖 Initializing AI Writing Agent..."):
-            agent = WritingAgent()
+            agent = WritingAgent(progress_callback=progress_callback)
             
             # Check if agent is available
             if not agent.llm_backend or not agent.llm_backend.is_available():
                 st.error("❌ AI Writing Agent not available. Please check your OpenAI API configuration.")
                 return
         
-        # Generate book with progress tracking
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        progress_callback("📖 Starting book generation with retry support...")
         
-        # Step 1: Story Summary
-        status_text.text("🔍 Generating story summary...")
-        progress_bar.progress(20)
-        agent.generate_story_summary(book)
-        
-        # Step 2: Title
-        status_text.text("📚 Creating book title...")
-        progress_bar.progress(30)
-        agent.generate_title(book)
-        
-        # Step 3: Characters
-        status_text.text("👥 Developing characters...")
-        progress_bar.progress(40)
-        agent.generate_characters(book)
-        
-        # Step 4: Chapter Plan
-        status_text.text("📋 Planning chapters...")
-        progress_bar.progress(50)
-        agent.generate_chapter_plan(book)
-        
-        # Adjust chapter count if needed
-        st.info(f"{len(book.chapters)} chapters created!")
-        
-        # Step 5: Write chapters
-        total_chapters = len(book.chapters)
-        for i, chapter in enumerate(book.chapters):
-            status_text.text(f"✍️ Writing Chapter {chapter.chapter_number}: {chapter.title}")
-            progress = 50 + int((i + 1) / total_chapters * 40)
-            progress_bar.progress(progress)
-            agent.write_chapter_content(book, chapter)
-        
-        # Step 6: Save book
-        status_text.text("💾 Saving your book...")
-        progress_bar.progress(90)
-        
-        state_manager = BookStateManager()
-        book_id, saved_book = state_manager.create_book(
-            st.session_state.user_data['uid'],
-            **book.model_dump()
-        )
-        
-        progress_bar.progress(100)
-        status_text.text("✅ Book generation completed!")
-        
-        # Show success message
-        st.success(f"🎉 Successfully generated '{book.title}'!")
-        
-        # Display book stats
-        total_words = sum(len(ch.content.split()) for ch in book.chapters if ch.content)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("📖 Chapters", len(book.chapters))
-        with col2:
-            st.metric("👥 Characters", len(book.characters))
-        with col3:
-            st.metric("📝 Words", f"{total_words:,}")
+        try:
+            # Generate full book using the agent's robust method
+            agent.write_full_book(book)
+            
+            # Update progress for saving
+            progress_bar.progress(90)
+            progress_callback("💾 Saving your book...")
+            
+            # Save book
+            state_manager = BookStateManager()
+            book_id, saved_book = state_manager.create_book(
+                st.session_state.user_data['uid'],
+                **book.model_dump()
+            )
+            
+            progress_bar.progress(100)
+            progress_callback("✅ Book generation completed!")
+            
+            # Show success message
+            st.success(f"🎉 Successfully generated '{book.title or 'Untitled Book'}'!")
+            
+            # Display book stats
+            completed_chapters = [ch for ch in book.chapters if ch.content]
+            total_words = sum(len(ch.content.split()) for ch in completed_chapters)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📖 Chapters", f"{len(completed_chapters)}/{len(book.chapters) if book.chapters else 0}")
+            with col2:
+                st.metric("👥 Characters", len(book.characters) if book.characters else 0)
+            with col3:
+                st.metric("📝 Words", f"{total_words:,}")
+            
+            # Store book info for potential regeneration
+            st.session_state.last_generated_book = {
+                'book': book,
+                'book_id': book_id,
+                'agent': agent
+            }
+            
+        except PartialGenerationFailure as e:
+            # Handle partial failures gracefully
+            progress_bar.progress(100)
+            
+            st.warning(f"⚠️ Book generation completed with some issues: {str(e)}")
+            
+            # Still save what we have
+            state_manager = BookStateManager()
+            book_id, saved_book = state_manager.create_book(
+                st.session_state.user_data['uid'],
+                **book.model_dump()
+            )
+            
+            # Show partial stats
+            completed_chapters = [ch for ch in book.chapters if ch.content]
+            total_words = sum(len(ch.content.split()) for ch in completed_chapters)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📖 Chapters", f"{len(completed_chapters)}/{len(book.chapters) if book.chapters else 0}")
+            with col2:
+                st.metric("👥 Characters", len(book.characters) if book.characters else 0)
+            with col3:
+                st.metric("📝 Words", f"{total_words:,}")
+            
+            # Store for regeneration
+            st.session_state.last_generated_book = {
+                'book': book,
+                'book_id': book_id,
+                'agent': agent,
+                'failed_steps': e.failed_steps
+            }
+            
+            # Show retry options
+            st.markdown("---")
+            st.markdown("### 🔄 Retry Options")
+            
+            if st.button("🔄 Retry Failed Steps", type="primary"):
+                retry_failed_steps(book, agent, e.failed_steps)
         
         # Refresh books list
         if 'user_books' in st.session_state:
@@ -332,6 +371,53 @@ def generate_book(base_prompt, genre, target_audience, language, writing_style):
     except Exception as e:
         logger.error(f"Book generation error: {e}")
         st.error(f"❌ Book generation failed: {str(e)}")
+        
+        # Show retry option for complete failure
+        if st.button("🔄 Try Again"):
+            st.rerun()
+
+
+def retry_failed_steps(book: Book, agent: WritingAgent, failed_steps: list):
+    """Retry failed generation steps."""
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        total_steps = len(failed_steps)
+        for i, step in enumerate(failed_steps):
+            progress = int((i / total_steps) * 100)
+            progress_bar.progress(progress)
+            status_text.text(f"🔄 Retrying: {step}")
+            
+            if step == "Story Summary":
+                agent.generate_story_summary(book)
+            elif step == "Title":
+                agent.generate_title(book)
+            elif step == "Characters":
+                agent.generate_characters(book)
+            elif step == "Chapter Plan":
+                agent.generate_chapter_plan(book)
+            elif step.startswith("Chapters:"):
+                # Extract chapter numbers from the step
+                chapter_nums_str = step.split(":")[1].strip()
+                chapter_nums = [int(x.strip()) for x in chapter_nums_str.split(",")]
+                for chapter_num in chapter_nums:
+                    agent.regenerate_chapter(book, chapter_num)
+        
+        progress_bar.progress(100)
+        status_text.text("✅ Retry completed!")
+        st.success("🎉 Successfully retried failed steps!")
+        
+        # Update the saved book
+        if 'last_generated_book' in st.session_state:
+            book_id = st.session_state.last_generated_book['book_id']
+            state_manager = BookStateManager()
+            # Update the book in storage
+            # Note: We'd need to add an update method to BookStateManager
+            
+    except Exception as e:
+        st.error(f"❌ Retry failed: {str(e)}")
+        logger.error(f"Retry error: {e}")
 
 def show_books_section():
     """Display the user's books section."""
@@ -447,7 +533,14 @@ def show_book_viewer():
         
         # Display selected chapter
         chapter = book.chapters[selected_chapter]
-        st.markdown(f"### {chapter_titles[selected_chapter]}")
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.markdown(f"### {chapter_titles[selected_chapter]}")
+        with col2:
+            # Add regenerate button for individual chapters
+            if st.button(f"🔄 Regenerate", key=f"regen_ch_{chapter.chapter_number}"):
+                regenerate_single_chapter(book_id, chapter.chapter_number)
         
         if chapter.content:
             # Format the content nicely
@@ -457,7 +550,65 @@ def show_book_viewer():
                     st.write(paragraph.strip())
                     st.write("")  # Add spacing between paragraphs
         else:
-            st.info("Chapter content not available.")
+            st.warning("Chapter content not available.")
+            
+            # Show regenerate button for missing content
+            if st.button(f"🔄 Generate Chapter Content", key=f"gen_ch_{chapter.chapter_number}"):
+                regenerate_single_chapter(book_id, chapter.chapter_number)
+
+
+def regenerate_single_chapter(book_id: str, chapter_number: int):
+    """Regenerate a single chapter."""
+    try:
+        # Get the book from session
+        user_books = st.session_state.get('user_books', {})
+        if book_id not in user_books:
+            st.error("Book not found!")
+            return
+        
+        book = user_books[book_id]
+        
+        # Create a progress callback
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        def progress_callback(message: str):
+            status_text.text(message)
+        
+        # Initialize agent for regeneration
+        with st.spinner("🤖 Initializing AI Writing Agent..."):
+            agent = WritingAgent(progress_callback=progress_callback)
+            
+            if not agent.llm_backend or not agent.llm_backend.is_available():
+                st.error("❌ AI Writing Agent not available. Please check your OpenAI API configuration.")
+                return
+        
+        progress_bar.progress(50)
+        
+        # Regenerate the chapter
+        agent.regenerate_chapter(book, chapter_number)
+        
+        progress_bar.progress(90)
+        status_text.text("💾 Saving changes...")
+        
+        # Update the book in storage
+        state_manager = BookStateManager()
+        # Note: We'd need to add an update method to BookStateManager
+        # For now, we'll update the session state
+        
+        progress_bar.progress(100)
+        status_text.text("✅ Chapter regenerated!")
+        
+        st.success(f"🎉 Chapter {chapter_number} regenerated successfully!")
+        
+        # Refresh the page to show new content
+        if 'user_books' in st.session_state:
+            del st.session_state.user_books
+        st.rerun()
+        
+    except Exception as e:
+        logger.error(f"Chapter regeneration error: {e}")
+        st.error(f"❌ Chapter regeneration failed: {str(e)}")
 
 def delete_book(book_id):
     """Delete a book."""

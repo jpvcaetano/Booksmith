@@ -1,4 +1,5 @@
 import json
+import time
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -20,6 +21,10 @@ class TestLLMConfig:
         assert config.api_base is None
         assert config.use_json_mode is True
         assert config.enforce_schema is True
+        # Test new retry configuration defaults
+        assert config.timeout_seconds == 60
+        assert config.max_retries == 3
+        assert config.retry_delay == 5.0
 
     def test_create_custom_config(self):
         """Test creating config with custom values."""
@@ -41,6 +46,18 @@ class TestLLMConfig:
         assert config.use_json_mode is False
         assert config.enforce_schema is False
 
+    def test_create_config_with_retry_settings(self):
+        """Test creating config with custom retry settings."""
+        config = LLMConfig(
+            timeout_seconds=120,
+            max_retries=5,
+            retry_delay=5.0,
+        )
+
+        assert config.timeout_seconds == 120
+        assert config.max_retries == 5
+        assert config.retry_delay == 5.0
+
 
 class TestOpenAIBackend:
     """Tests for OpenAIBackend class."""
@@ -56,7 +73,9 @@ class TestOpenAIBackend:
         assert backend.config == llm_config
         assert backend.client == mock_client
         mock_openai_class.assert_called_once_with(
-            api_key=llm_config.api_key, base_url=llm_config.api_base
+            api_key=llm_config.api_key,
+            base_url=llm_config.api_base,
+            timeout=llm_config.timeout_seconds,
         )
 
     def test_initialization_no_api_key(self):
@@ -127,10 +146,11 @@ class TestOpenAIBackend:
             "API Error"
         )
 
-        result = mock_openai_backend.generate("Test prompt")
-
-        assert result.startswith("Error: Failed to generate text")
-        assert "API Error" in result
+        with pytest.raises(
+            RuntimeError,
+            match="Failed to complete text generation after .* attempts: API Error",
+        ):
+            mock_openai_backend.generate("Test prompt")
 
     def test_generate_structured_success(self, mock_openai_backend):
         """Test successful structured generation."""
@@ -277,3 +297,111 @@ class TestOpenAIBackend:
         backend.client = None
 
         assert backend.is_available() is False
+
+
+class TestSimpleRetryLogic:
+    """Tests for simple retry logic."""
+
+    @patch("openai.OpenAI")
+    def test_generate_with_retry_success_after_failure(
+        self, mock_openai_class, llm_config
+    ):
+        """Test that generate retries and succeeds after initial failure."""
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        # First call fails, second call succeeds
+        mock_response_success = Mock()
+        mock_response_success.choices = [Mock()]
+        mock_response_success.choices[0].message.content = "Generated text"
+
+        error = Exception("API error")
+        mock_client.chat.completions.create.side_effect = [
+            error,  # First call fails
+            mock_response_success,  # Second call succeeds
+        ]
+
+        backend = OpenAIBackend(llm_config)
+
+        # Should succeed after retry
+        result = backend.generate("Test prompt")
+        assert result == "Generated text"
+        assert mock_client.chat.completions.create.call_count == 2
+
+    @patch("openai.OpenAI")
+    def test_generate_structured_with_retry_success(
+        self, mock_openai_class, llm_config
+    ):
+        """Test that generate_structured retries and succeeds after initial failure."""
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        # First call fails, second call succeeds
+        mock_response_success = Mock()
+        mock_response_success.choices = [Mock()]
+        mock_response_success.choices[0].message.content = '{"name": "test"}'
+
+        error = Exception("API error")
+        mock_client.chat.completions.create.side_effect = [
+            error,  # First call fails
+            mock_response_success,  # Second call succeeds
+        ]
+
+        backend = OpenAIBackend(llm_config)
+        schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+        # Should succeed after retry
+        result = backend.generate_structured("Test prompt", schema=schema)
+        assert result == {"name": "test"}
+        assert mock_client.chat.completions.create.call_count == 2
+
+    @patch("openai.OpenAI")
+    def test_generate_fails_after_max_retries(self, mock_openai_class):
+        """Test that generate fails after exhausting all retries."""
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        config = LLMConfig(max_retries=2, api_key="test-key")
+
+        error = Exception("API error")
+        mock_client.chat.completions.create.side_effect = error
+
+        backend = OpenAIBackend(config)
+
+        # Should fail after exhausting retries
+        with pytest.raises(
+            RuntimeError, match="Failed to complete text generation after 3 attempts"
+        ):
+            backend.generate("Test prompt")
+
+    @patch("openai.OpenAI")
+    def test_timeout_configuration(self, mock_openai_class):
+        """Test that timeout is correctly configured in OpenAI client."""
+        config = LLMConfig(timeout_seconds=120, api_key="test-key")
+        backend = OpenAIBackend(config)
+
+        # Verify OpenAI client was created with correct timeout
+        mock_openai_class.assert_called_with(
+            api_key="test-key", base_url=None, timeout=120
+        )
+
+    @patch("openai.OpenAI")
+    @patch("time.sleep")
+    def test_retry_delay_timing(self, mock_sleep, mock_openai_class):
+        """Test that retry delays are correctly applied."""
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+
+        config = LLMConfig(max_retries=2, retry_delay=5.0, api_key="test-key")
+
+        error = Exception("API error")
+        mock_client.chat.completions.create.side_effect = error
+
+        backend = OpenAIBackend(config)
+
+        with pytest.raises(RuntimeError):
+            backend.generate("Test prompt")
+
+        # Should have called sleep twice (for 2 retries) with the configured delay
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_called_with(5.0)
