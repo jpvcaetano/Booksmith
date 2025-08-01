@@ -289,3 +289,62 @@ def sample_chapter_plan_text_response():
 **Chapter 2: The Challenge** 
 **Summary:** Alice faces her first real test against dark forces.
 """
+
+
+# Web module fixtures
+@pytest.fixture
+def mock_firebase_config():
+    """Mock Firebase configuration for testing."""
+    return {
+        "apiKey": "test-api-key",
+        "authDomain": "test-project.firebaseapp.com",
+        "projectId": "test-project",
+        "storageBucket": "test-project.appspot.com",
+        "messagingSenderId": "123456789",
+        "appId": "test-app-id",
+        "databaseURL": "",
+    }
+
+
+@pytest.fixture
+def mock_firebase_user():
+    """Mock Firebase user data for testing."""
+    return {
+        "uid": "test-user-123",
+        "email": "test@example.com",
+        "display_name": "Test User",
+        "email_verified": True,
+    }
+
+
+@pytest.fixture
+def mock_streamlit_session():
+    """Mock Streamlit session state for testing."""
+    session_mock = Mock()
+    session_mock.user_token = None
+    session_mock.user_data = None
+    session_mock.user_books = {}
+    session_mock.firebase_auth = None
+    session_mock.firebase_user_manager = None
+    return session_mock
+
+
+@pytest.fixture
+def sample_firebase_user_record():
+    """Sample Firebase UserRecord for testing."""
+    user_record = Mock()
+    user_record.uid = "test-user-123"
+    user_record.email = "test@example.com"
+    user_record.display_name = "Test User"
+    user_record.email_verified = True
+    user_record.phone_number = None
+    user_record.photo_url = None
+    user_record.disabled = False
+
+    # Mock metadata
+    metadata = Mock()
+    metadata.creation_timestamp = 1640995200000  # 2022-01-01
+    metadata.last_sign_in_timestamp = 1640995200000
+    user_record.user_metadata = metadata
+
+    return user_record

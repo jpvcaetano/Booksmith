@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from booksmith.generation.agent import WritingAgent
+from booksmith.generation.agent import PartialGenerationFailure, WritingAgent
 from booksmith.generation.openai import LLMConfig
 from booksmith.models import Book, Chapter, Character
 from booksmith.utils.validators import DependencyValidationError
@@ -393,3 +393,246 @@ class TestWritingAgent:
 
         assert info["status"] == "not_available"
         assert info["backend"] == "none"
+
+
+class TestWritingAgentRetryLogic:
+    """Tests for WritingAgent retry logic and error handling."""
+
+    def test_initialization_with_progress_callback(self, llm_config):
+        """Test agent initialization with progress callback."""
+        callback_messages = []
+
+        def progress_callback(message: str):
+            callback_messages.append(message)
+
+        with patch("booksmith.generation.agent.OpenAIBackend"):
+            agent = WritingAgent(llm_config, progress_callback=progress_callback)
+
+            assert agent.progress_callback == progress_callback
+            assert agent.llm_config == llm_config
+
+    def test_report_progress_with_callback(self, llm_config):
+        """Test progress reporting with callback."""
+        callback_messages = []
+
+        def progress_callback(message: str):
+            callback_messages.append(message)
+
+        with patch("booksmith.generation.agent.OpenAIBackend"):
+            agent = WritingAgent(llm_config, progress_callback=progress_callback)
+            agent._report_progress("Test message")
+
+            assert "Test message" in callback_messages
+
+    def test_report_progress_without_callback(self, llm_config):
+        """Test progress reporting without callback."""
+        with patch("booksmith.generation.agent.OpenAIBackend"):
+            agent = WritingAgent(llm_config)
+            # Should not raise an error
+            agent._report_progress("Test message")
+
+    def test_handle_generation_error_timeout(self, llm_config):
+        """Test error handling for timeout errors."""
+        callback_messages = []
+
+        def progress_callback(message: str):
+            callback_messages.append(message)
+
+        with patch("booksmith.generation.agent.OpenAIBackend"):
+            agent = WritingAgent(llm_config, progress_callback=progress_callback)
+
+            error = RuntimeError("timeout occurred")
+            agent._handle_generation_error("Test operation", error)
+
+            # Should contain timeout-specific message
+            timeout_messages = [msg for msg in callback_messages if "timed out" in msg]
+            assert len(timeout_messages) > 0
+
+    def test_handle_generation_error_rate_limit(self, llm_config):
+        """Test error handling for rate limit errors."""
+        callback_messages = []
+
+        def progress_callback(message: str):
+            callback_messages.append(message)
+
+        with patch("booksmith.generation.agent.OpenAIBackend"):
+            agent = WritingAgent(llm_config, progress_callback=progress_callback)
+
+            error = RuntimeError("rate limit exceeded")
+            agent._handle_generation_error("Test operation", error)
+
+            # Should contain rate limit-specific message
+            rate_limit_messages = [
+                msg for msg in callback_messages if "Rate limit" in msg
+            ]
+            assert len(rate_limit_messages) > 0
+
+    @patch("booksmith.generation.agent.OpenAIBackend")
+    def test_write_full_book_with_partial_failure(
+        self, mock_backend_class, minimal_book, llm_config
+    ):
+        """Test write_full_book handling partial failures gracefully."""
+        mock_backend = Mock()
+        mock_backend.is_available.return_value = True
+        mock_backend_class.return_value = mock_backend
+
+        callback_messages = []
+
+        def progress_callback(message: str):
+            callback_messages.append(message)
+
+        agent = WritingAgent(llm_config, progress_callback=progress_callback)
+
+        # Mock methods to simulate partial failure
+        with patch.object(
+            agent, "generate_story_summary"
+        ) as mock_summary, patch.object(
+            agent, "generate_title"
+        ) as mock_title, patch.object(
+            agent, "generate_characters"
+        ) as mock_characters, patch.object(
+            agent, "generate_chapter_plan"
+        ) as mock_plan:
+            # Make title generation fail
+            mock_title.side_effect = Exception("Title generation failed")
+
+            # Other methods succeed
+            mock_summary.return_value = None
+            mock_characters.return_value = None
+            mock_plan.return_value = None
+
+            # Should raise PartialGenerationFailure
+            with pytest.raises(PartialGenerationFailure) as exc_info:
+                agent.write_full_book(minimal_book)
+
+            # Check that the failure contains the right step
+            assert "Title" in exc_info.value.failed_steps
+
+    @patch("booksmith.generation.agent.OpenAIBackend")
+    def test_write_full_book_with_chapter_failures(
+        self, mock_backend_class, minimal_book, llm_config
+    ):
+        """Test write_full_book handling chapter generation failures."""
+        mock_backend = Mock()
+        mock_backend.is_available.return_value = True
+        mock_backend_class.return_value = mock_backend
+
+        agent = WritingAgent(llm_config)
+
+        # Set up book with chapters
+        minimal_book.chapters = [
+            Chapter(chapter_number=1, title="Chapter 1"),
+            Chapter(chapter_number=2, title="Chapter 2"),
+        ]
+
+        # Mock methods
+        with patch.object(
+            agent, "generate_story_summary"
+        ) as mock_summary, patch.object(
+            agent, "generate_title"
+        ) as mock_title, patch.object(
+            agent, "generate_characters"
+        ) as mock_characters, patch.object(
+            agent, "generate_chapter_plan"
+        ) as mock_plan, patch.object(
+            agent, "write_chapter_content"
+        ) as mock_chapter:
+            # Make chapter 2 fail
+            def chapter_side_effect(book, chapter):
+                if chapter.chapter_number == 2:
+                    raise Exception("Chapter 2 failed")
+
+            mock_chapter.side_effect = chapter_side_effect
+
+            # Should raise PartialGenerationFailure
+            with pytest.raises(PartialGenerationFailure) as exc_info:
+                agent.write_full_book(minimal_book)
+
+            # Check that the failure contains chapter information
+            failed_steps = exc_info.value.failed_steps
+            chapter_failures = [step for step in failed_steps if "Chapters:" in step]
+            assert len(chapter_failures) > 0
+            assert "2" in chapter_failures[0]
+
+    @patch("booksmith.generation.agent.OpenAIBackend")
+    def test_regenerate_chapter_success(
+        self, mock_backend_class, minimal_book, llm_config
+    ):
+        """Test regenerating a specific chapter."""
+        mock_backend = Mock()
+        mock_backend.is_available.return_value = True
+        mock_backend_class.return_value = mock_backend
+
+        agent = WritingAgent(llm_config)
+
+        # Set up book with chapters
+        chapter = Chapter(chapter_number=1, title="Chapter 1", content="Old content")
+        minimal_book.chapters = [chapter]
+
+        with patch.object(agent, "write_chapter_content") as mock_write:
+            agent.regenerate_chapter(minimal_book, 1)
+
+            # Should clear content and call write_chapter_content
+            assert chapter.content is None
+            mock_write.assert_called_once_with(minimal_book, chapter)
+
+    @patch("booksmith.generation.agent.OpenAIBackend")
+    def test_regenerate_chapter_not_found(
+        self, mock_backend_class, minimal_book, llm_config
+    ):
+        """Test regenerating a chapter that doesn't exist."""
+        mock_backend = Mock()
+        mock_backend.is_available.return_value = True
+        mock_backend_class.return_value = mock_backend
+
+        agent = WritingAgent(llm_config)
+        minimal_book.chapters = []
+
+        with pytest.raises(ValueError, match="No chapters available"):
+            agent.regenerate_chapter(minimal_book, 1)
+
+    @patch("booksmith.generation.agent.OpenAIBackend")
+    def test_regenerate_invalid_chapter_number(
+        self, mock_backend_class, minimal_book, llm_config
+    ):
+        """Test regenerating with invalid chapter number."""
+        mock_backend = Mock()
+        mock_backend.is_available.return_value = True
+        mock_backend_class.return_value = mock_backend
+
+        agent = WritingAgent(llm_config)
+        minimal_book.chapters = [Chapter(chapter_number=1, title="Chapter 1")]
+
+        with pytest.raises(ValueError, match="Chapter 2 not found"):
+            agent.regenerate_chapter(minimal_book, 2)
+
+    def test_default_config_includes_retry_settings(self):
+        """Test that default LLM config includes retry settings."""
+        with patch("booksmith.generation.agent.OpenAIBackend"), patch.dict(
+            "os.environ", {"OPENAI_API_KEY": "test-key"}
+        ):
+            agent = WritingAgent()
+
+            config = agent.llm_config
+            assert config.timeout_seconds == 60
+            assert config.max_retries == 3
+            assert config.retry_delay == 5.0
+
+
+class TestPartialGenerationFailure:
+    """Tests for PartialGenerationFailure exception."""
+
+    def test_partial_generation_failure_creation(self):
+        """Test creating PartialGenerationFailure with failed steps."""
+        failed_steps = ["Title", "Chapters: 1, 2"]
+        error = PartialGenerationFailure("Some steps failed", failed_steps)
+
+        assert str(error) == "Some steps failed"
+        assert error.failed_steps == failed_steps
+
+    def test_partial_generation_failure_empty_steps(self):
+        """Test creating PartialGenerationFailure with empty failed steps."""
+        error = PartialGenerationFailure("No specific failures", [])
+
+        assert str(error) == "No specific failures"
+        assert error.failed_steps == []
